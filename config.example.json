@@ -1,0 +1,9 @@
+{
+  "users": [
+    {
+      "userId": "service-website",
+      "secret": "change-me",
+      "name": "Website"
+    }
+  ]
+}
