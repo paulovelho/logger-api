@@ -1,3 +1,0 @@
-log.guia.lol {
-	reverse_proxy api:3000
-}
