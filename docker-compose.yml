@@ -1,6 +1,6 @@
 services:
 
-  api:
+  guia_lol-logger:
     build: .
     container_name: guia_lol-logger
     expose:
