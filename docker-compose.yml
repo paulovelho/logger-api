@@ -2,6 +2,7 @@ services:
 
   api:
     build: .
+    container_name: guia_lol-logger
     expose:
       - "3000"
     env_file: .env
