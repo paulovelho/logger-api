@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logger Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-monospace, 'Cascadia Code', Menlo, monospace;
+      background: #14161a;
+      color: #d4d7dd;
+      margin: 0;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.2rem; margin: 0 0 1rem; }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: end;
+      margin-bottom: 1rem;
+    }
+    .filters label {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.75rem;
+      gap: 0.25rem;
+      color: #8b919c;
+    }
+    input, select, button {
+      font: inherit;
+      background: #1e2127;
+      color: #d4d7dd;
+      border: 1px solid #353a44;
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+    }
+    button { cursor: pointer; }
+    button:hover { background: #2a2e36; }
+    .summary { font-size: 0.8rem; color: #8b919c; margin-bottom: 0.75rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td {
+      text-align: left;
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid #2a2e36;
+      vertical-align: top;
+    }
+    th { color: #8b919c; font-weight: normal; position: sticky; top: 0; background: #14161a; }
+    td.ts { white-space: nowrap; color: #8b919c; }
+    td.uid { white-space: nowrap; color: #7aa2f7; }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 8rem;
+      overflow-y: auto;
+    }
+    tr.expanded pre { max-height: none; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #1a1d22; }
+    .pager { display: flex; gap: 0.5rem; margin-top: 1rem; align-items: center; }
+    .error { color: #f7768e; }
+  </style>
+</head>
+<body>
+  <h1>Logger Admin — all services</h1>
+
+  <div class="filters">
+    <label>service
+      <select id="userId"><option value="">all</option></select>
+    </label>
+    <label>from
+      <input type="datetime-local" id="from" />
+    </label>
+    <label>to
+      <input type="datetime-local" id="to" />
+    </label>
+    <label>per page
+      <select id="limit">
+        <option>25</option>
+        <option selected>50</option>
+        <option>100</option>
+        <option>250</option>
+      </select>
+    </label>
+    <button id="apply">apply</button>
+    <button id="refresh">refresh</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+
+  <table>
+    <thead>
+      <tr><th>timestamp</th><th>service</th><th>data</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="pager">
+    <button id="prev">&laquo; prev</button>
+    <span id="page"></span>
+    <button id="next">next &raquo;</button>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let skip = 0;
+    let total = 0;
+
+    async function loadServices() {
+      const res = await fetch('/admin/services');
+      const { services } = await res.json();
+      const sel = $('userId');
+      for (const s of services) {
+        const opt = document.createElement('option');
+        opt.value = s.userId;
+        opt.textContent = `${s.userId} (${s.count})`;
+        sel.appendChild(opt);
+      }
+    }
+
+    async function loadLogs() {
+      const limit = Number($('limit').value);
+      const params = new URLSearchParams({ limit, skip });
+      if ($('userId').value) params.set('userId', $('userId').value);
+      if ($('from').value) params.set('from', new Date($('from').value).toISOString());
+      if ($('to').value) params.set('to', new Date($('to').value).toISOString());
+
+      const rows = $('rows');
+      try {
+        const res = await fetch('/admin/logs?' + params);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        total = data.total;
+
+        rows.innerHTML = '';
+        for (const log of data.logs) {
+          const tr = document.createElement('tr');
+          const ts = document.createElement('td');
+          ts.className = 'ts';
+          ts.textContent = new Date(log.timestamp).toLocaleString();
+          const uid = document.createElement('td');
+          uid.className = 'uid';
+          uid.textContent = log.userId;
+          const dataCell = document.createElement('td');
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(log.data, null, 2);
+          dataCell.appendChild(pre);
+          tr.append(ts, uid, dataCell);
+          tr.addEventListener('click', () => tr.classList.toggle('expanded'));
+          rows.appendChild(tr);
+        }
+
+        $('summary').textContent = `${total} logs total — showing ${data.count}`;
+        const pageNum = Math.floor(skip / limit) + 1;
+        const pages = Math.max(1, Math.ceil(total / limit));
+        $('page').textContent = `page ${pageNum} / ${pages}`;
+        $('prev').disabled = skip === 0;
+        $('next').disabled = skip + limit >= total;
+      } catch (err) {
+        rows.innerHTML = '';
+        $('summary').innerHTML = `<span class="error">Failed to load logs: ${err.message}</span>`;
+      }
+    }
+
+    $('apply').addEventListener('click', () => { skip = 0; loadLogs(); });
+    $('refresh').addEventListener('click', loadLogs);
+    $('prev').addEventListener('click', () => { skip = Math.max(0, skip - Number($('limit').value)); loadLogs(); });
+    $('next').addEventListener('click', () => { skip += Number($('limit').value); loadLogs(); });
+
+    loadServices();
+    loadLogs();
+  </script>
+</body>
+</html>

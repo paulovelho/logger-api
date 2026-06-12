@@ -19,6 +19,8 @@ src/
   routes/auth.js       # POST /login — validates against config.json, returns JWT
   routes/log.js        # POST /log — stores arbitrary JSON with userId from token
   routes/report.js     # GET /report — returns logs filtered by userId, with date range + pagination
+  routes/admin.js      # GET /admin/logs + /admin/services — all data, no auth (yet)
+public/admin.html      # Admin dashboard UI, served at GET /admin
 config.json            # Service user credentials (userId + secret pairs)
 .env                   # JWT_SECRET, MONGO_URI, PORT
 docker-compose.yml     # Two services: api + mongo:7
@@ -49,6 +51,9 @@ npm run dev                   # Local dev with --watch (needs local MongoDB)
 | POST   | /log      | Bearer   | Ingest any JSON payload          |
 | GET    | /report   | Bearer   | Query logs (from, to, limit, skip) |
 | GET    | /health   | No       | Health check                     |
+| GET    | /admin    | No       | Admin dashboard (browse all logs) |
+| GET    | /admin/logs | No     | All logs, any service (userId, from, to, limit, skip) |
+| GET    | /admin/services | No | Per-service log counts + last activity |
 
 ## Notes
 
