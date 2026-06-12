@@ -23,6 +23,16 @@ app.get('/admin', (_req, res) =>
   res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'))
 );
 
+app.get('/help', (_req, res) => res.redirect('/docs'));
+
+app.get('/docs', (_req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'public', 'docs.html'))
+);
+
+app.get('/openapi.yaml', (_req, res) =>
+  res.sendFile(path.join(__dirname, '..', 'openapi.yaml'))
+);
+
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;

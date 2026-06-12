@@ -54,6 +54,8 @@ npm run dev                   # Local dev with --watch (needs local MongoDB)
 | GET    | /admin    | No       | Admin dashboard (browse all logs) |
 | GET    | /admin/logs | No     | All logs, any service (userId, from, to, limit, skip) |
 | GET    | /admin/services | No | Per-service log counts + last activity |
+| GET    | /docs     | No       | Swagger UI (renders openapi.yaml)  |
+| GET    | /help     | No       | Redirects to /docs               |
 
 ## Notes
 

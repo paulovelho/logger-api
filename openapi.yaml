@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: Logger API
+  description: |
+    Flexible logging microservice for the **guia.lol** project.
+    Services authenticate via JWT and log arbitrary JSON data, each isolated to their own logs.
+
+    Service credentials live in `config.json` (userId + secret pairs). The `userId` is always
+    taken from the JWT, never from the request body.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local / Docker
+tags:
+  - name: Auth
+    description: Service authentication
+  - name: Logs
+    description: Log ingestion and querying (per-service, JWT required)
+  - name: Admin
+    description: Cross-service access — no authentication (yet)
+  - name: System
+paths:
+  /login:
+    post:
+      tags: [Auth]
+      summary: Get a JWT token
+      description: Validates a service's `userId` + `secret` against `config.json` and returns a JWT.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, secret]
+              properties:
+                userId:
+                  type: string
+                  example: my-service
+                secret:
+                  type: string
+                  example: s3cr3t
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /log:
+    post:
+      tags: [Logs]
+      summary: Ingest a log entry
+      description: |
+        Stores the entire request body as the `data` field of a new log entry.
+        Any JSON structure is accepted; `userId` comes from the JWT.
+      operationId: createLog
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              example:
+                event: user.signup
+                email: user@example.com
+                meta:
+                  source: web
+      responses:
+        '201':
+          description: Log entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: 665f1c2e8b3a4d0012a4e9f1
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /report:
+    get:
+      tags: [Logs]
+      summary: Query own logs
+      description: Returns the authenticated service's logs, newest first, with optional date range and pagination.
+      operationId: getReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/skip'
+      responses:
+        '200':
+          description: Matching logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      operationId: health
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /admin/logs:
+    get:
+      tags: [Admin]
+      summary: Query logs across all services
+      description: Same as `/report` but unauthenticated and with an optional `userId` filter.
+      operationId: adminLogs
+      parameters:
+        - name: userId
+          in: query
+          description: Filter by service
+          schema:
+            type: string
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/skip'
+      responses:
+        '200':
+          description: Matching logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogList'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/services:
+    get:
+      tags: [Admin]
+      summary: Per-service summary
+      description: Log count and most recent entry timestamp for each service, sorted by last activity.
+      operationId: adminServices
+      responses:
+        '200':
+          description: Service summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        userId:
+                          type: string
+                          example: my-service
+                        count:
+                          type: integer
+                          example: 42
+                        lastLog:
+                          type: string
+                          format: date-time
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Obtain a token via `POST /login`.
+  parameters:
+    from:
+      name: from
+      in: query
+      description: Only logs at or after this date/time
+      schema:
+        type: string
+        format: date-time
+    to:
+      name: to
+      in: query
+      description: Only logs at or before this date/time
+      schema:
+        type: string
+        format: date-time
+    limit:
+      name: limit
+      in: query
+      description: Max entries to return
+      schema:
+        type: integer
+        default: 100
+    skip:
+      name: skip
+      in: query
+      description: Entries to skip (pagination offset)
+      schema:
+        type: integer
+        default: 0
+  schemas:
+    LogEntry:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 665f1c2e8b3a4d0012a4e9f1
+        userId:
+          type: string
+          example: my-service
+        data:
+          description: Arbitrary JSON payload as submitted by the service
+          example:
+            event: user.signup
+            email: user@example.com
+        timestamp:
+          type: string
+          format: date-time
+    LogList:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total entries matching the filter (ignoring pagination)
+          example: 250
+        count:
+          type: integer
+          description: Entries in this response
+          example: 100
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogEntry'
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Invalid credentials
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or expired token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Internal error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
