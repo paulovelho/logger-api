@@ -32,7 +32,7 @@ docker-compose.yml     # Two services: api + mongo:7
 - **`data` field is `Mixed`** — each service logs whatever JSON structure it wants.
 - **`userId` comes from the JWT only**, never from the request body — prevents spoofing.
 - **Indexes** on `userId` and `timestamp` (the two filter fields in `/report`).
-- **30-day JWT expiry** for service-to-service use.
+- **JWTs never expire** — service-to-service tokens are long-lived by design.
 - No rate limiting or body validation on `/log` (kept simple).
 
 ## Running
