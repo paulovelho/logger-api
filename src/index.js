@@ -1,6 +1,5 @@
 const path = require('path');
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
@@ -38,13 +37,15 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
+const pool = require('./db');
+
+pool.getConnection()
+  .then((conn) => {
+    conn.release();
+    console.log('Connected to MariaDB');
     app.listen(PORT, () => console.log(`Logger API running on port ${PORT}`));
   })
   .catch((err) => {
-    console.error('MongoDB connection error:', err);
+    console.error('MariaDB connection error:', err);
     process.exit(1);
   });

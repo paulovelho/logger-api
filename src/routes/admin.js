@@ -1,53 +1,57 @@
 const express = require('express');
-const Log = require('../models/Log');
+const pool = require('../db');
 
 const router = express.Router();
 
-// All logs across every service, with optional filters.
-// No auth — admin access is open for now.
 router.get('/logs', async (req, res) => {
   try {
     const { userId, from, to, limit = 100, skip = 0 } = req.query;
 
-    const filter = {};
+    const userIdVal = userId || null;
+    const fromVal = from || null;
+    const toVal = to || null;
 
-    if (userId) filter.userId = userId;
+    const [logs] = await pool.execute(
+      `SELECT id, user_id, data, timestamp
+       FROM logger_logs
+       WHERE (? IS NULL OR user_id = ?)
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)
+       ORDER BY timestamp DESC
+       LIMIT ? OFFSET ?`,
+      [userIdVal, userIdVal, fromVal, fromVal, toVal, toVal, Number(limit), Number(skip)]
+    );
 
-    if (from || to) {
-      filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to) filter.timestamp.$lte = new Date(to);
-    }
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM logger_logs
+       WHERE (? IS NULL OR user_id = ?)
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)`,
+      [userIdVal, userIdVal, fromVal, fromVal, toVal, toVal]
+    );
 
-    const logs = await Log.find(filter)
-      .sort({ timestamp: -1 })
-      .skip(Number(skip))
-      .limit(Number(limit))
-      .lean();
+    const mapped = logs.map((row) => ({
+      _id: row.id,
+      userId: row.user_id,
+      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
+      timestamp: row.timestamp,
+    }));
 
-    const total = await Log.countDocuments(filter);
-
-    res.json({ total, count: logs.length, logs });
+    res.json({ total, count: mapped.length, logs: mapped });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
 });
 
-// Per-service summary: log count and latest entry for each userId.
 router.get('/services', async (_req, res) => {
   try {
-    const services = await Log.aggregate([
-      {
-        $group: {
-          _id: '$userId',
-          count: { $sum: 1 },
-          lastLog: { $max: '$timestamp' },
-        },
-      },
-      { $sort: { lastLog: -1 } },
-      { $project: { _id: 0, userId: '$_id', count: 1, lastLog: 1 } },
-    ]);
-
+    const [services] = await pool.execute(
+      `SELECT user_id AS userId, COUNT(*) AS count, MAX(timestamp) AS lastLog
+       FROM logger_logs
+       GROUP BY user_id
+       ORDER BY lastLog DESC`
+    );
     res.json({ services });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch services' });

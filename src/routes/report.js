@@ -1,5 +1,5 @@
 const express = require('express');
-const Log = require('../models/Log');
+const pool = require('../db');
 const authenticate = require('../middleware/auth');
 
 const router = express.Router();
@@ -8,23 +8,37 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { from, to, limit = 100, skip = 0 } = req.query;
 
-    const filter = { userId: req.userId };
+    const fromVal = from || null;
+    const toVal = to || null;
 
-    if (from || to) {
-      filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to) filter.timestamp.$lte = new Date(to);
-    }
+    const [logs] = await pool.execute(
+      `SELECT id, user_id, data, timestamp
+       FROM logger_logs
+       WHERE user_id = ?
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)
+       ORDER BY timestamp DESC
+       LIMIT ? OFFSET ?`,
+      [req.userId, fromVal, fromVal, toVal, toVal, Number(limit), Number(skip)]
+    );
 
-    const logs = await Log.find(filter)
-      .sort({ timestamp: -1 })
-      .skip(Number(skip))
-      .limit(Number(limit))
-      .lean();
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM logger_logs
+       WHERE user_id = ?
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)`,
+      [req.userId, fromVal, fromVal, toVal, toVal]
+    );
 
-    const total = await Log.countDocuments(filter);
+    const mapped = logs.map((row) => ({
+      _id: row.id,
+      userId: row.user_id,
+      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
+      timestamp: row.timestamp,
+    }));
 
-    res.json({ total, count: logs.length, logs });
+    res.json({ total, count: mapped.length, logs: mapped });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
