@@ -289,6 +289,38 @@ function updatePager(panel, skip, limit, total) {
   $(panel + '-next').disabled = skip + limit >= total;
 }
 
+// ── Tokens ────────────────────────────────────────────────────────────────────
+
+$('token-get').addEventListener('click', async () => {
+  const userId = $('token-userid').value.trim();
+  const secret = $('token-secret').value.trim();
+  const errorEl = $('token-error');
+  const output = $('token-output');
+  errorEl.style.display = 'none';
+  output.value = '';
+
+  if (!userId || !secret) {
+    errorEl.textContent = 'Enter user id and secret.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, secret }),
+    });
+    if (!res.ok) { errorEl.textContent = 'Invalid credentials.'; errorEl.style.display = 'block'; return; }
+    const { token } = await res.json();
+    output.value = token;
+    output.select();
+  } catch {
+    errorEl.textContent = 'Request failed. Is the server reachable?';
+    errorEl.style.display = 'block';
+  }
+});
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 function init() {

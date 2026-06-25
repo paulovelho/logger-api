@@ -87,3 +87,7 @@ with open(config_path, 'w') as f:
 
 print(f"Added '{NEW_NAME}' (userId: '$NEW_ID') to config.json")
 PYEOF
+
+echo ""
+echo "⚠️  Restart the Docker container for the new service to take effect:"
+echo "   docker compose restart api"

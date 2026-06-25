@@ -33,6 +33,7 @@
       <button class="tab active" data-tab="logs">logs</button>
       <button class="tab" data-tab="errors">errors</button>
       <button class="tab" data-tab="services">services</button>
+      <button class="tab" data-tab="tokens">tokens</button>
     </nav>
 
     <div id="tab-logs" class="tab-panel">
@@ -140,6 +141,18 @@
     <div id="tab-services" class="tab-panel" hidden>
       <div class="summary" id="services-summary"></div>
       <div id="services-grid"></div>
+    </div>
+
+    <div id="tab-tokens" class="tab-panel" hidden>
+      <div class="filters">
+        <label>user id<input id="token-userid" type="text" autocomplete="username" /></label>
+        <label>secret<input id="token-secret" type="password" autocomplete="current-password" /></label>
+        <div class="filter-actions">
+          <button id="token-get">get JWT</button>
+        </div>
+      </div>
+      <div id="token-error" class="error" style="display:none"></div>
+      <textarea id="token-output" readonly rows="4" placeholder="JWT will appear here…" style="width:100%;margin-top:1rem;font-family:monospace;font-size:0.85rem;resize:vertical"></textarea>
     </div>
   </div>
 
