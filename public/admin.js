@@ -223,7 +223,7 @@ async function loadServices() {
     for (const s of services) {
       const opt = document.createElement('option');
       opt.value = s.service;
-      opt.textContent = `${s.service} (${s.count})`;
+      opt.textContent = s.service;
       if (s.service === current) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -244,10 +244,10 @@ async function loadServices() {
       <div class="service-last">last activity ${last}</div>
     `;
     card.addEventListener('click', () => {
-      $('logs-service').value = s.service;
-      logsSkip = 0;
-      document.querySelector('.tab[data-tab="logs"]').click();
-      loadLogs();
+      $('errors-service').value = s.service;
+      errorsSkip = 0;
+      document.querySelector('.tab[data-tab="errors"]').click();
+      loadErrors();
     });
     grid.appendChild(card);
   }

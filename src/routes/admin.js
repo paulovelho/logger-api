@@ -92,12 +92,19 @@ router.get('/errors', authenticate, async (req, res) => {
 
 router.get('/services', authenticate, async (_req, res) => {
   try {
-    const [services] = await pool.execute(
+    const [rows] = await pool.execute(
       `SELECT service, COUNT(*) AS count, MAX(timestamp) AS lastLog
        FROM logger_logs
-       GROUP BY service
-       ORDER BY lastLog DESC`
+       GROUP BY service`
     );
+    const byService = Object.fromEntries(rows.map((r) => [r.service, r]));
+    const services = config.users.map((u) => ({
+      service: u.service,
+      name: u.name || u.service,
+      count: byService[u.service]?.count ?? 0,
+      lastLog: byService[u.service]?.lastLog ?? null,
+    }));
+    services.sort((a, b) => (b.lastLog ?? '') < (a.lastLog ?? '') ? -1 : 1);
     res.json({ services });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch services' });
