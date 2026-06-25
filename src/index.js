@@ -8,6 +8,7 @@ const reportRoutes = require('./routes/report');
 const errorRoutes = require('./routes/error');
 const errorsRoutes = require('./routes/errors');
 const adminRoutes = require('./routes/admin');
+const tokenRoutes = require('./routes/token');
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ app.use('/report', reportRoutes);
 app.use('/error', errorRoutes);
 app.use('/errors', errorsRoutes);
 app.use('/admin', adminRoutes);
+app.use('/token', tokenRoutes);
 
 app.get('/admin', (_req, res) =>
   res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'))

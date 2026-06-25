@@ -34,12 +34,13 @@
       <button class="tab" data-tab="errors">errors</button>
       <button class="tab" data-tab="services">services</button>
       <button class="tab" data-tab="tokens">tokens</button>
+      <button class="tab" data-tab="docs">docs</button>
     </nav>
 
     <div id="tab-logs" class="tab-panel">
       <div class="filters">
         <label>service
-          <select id="logs-userId"><option value="">all</option></select>
+          <select id="logs-service"><option value="">all</option></select>
         </label>
         <label>from
           <input type="datetime-local" id="logs-from" />
@@ -90,7 +91,7 @@
     <div id="tab-errors" class="tab-panel" hidden>
       <div class="filters">
         <label>service
-          <select id="errors-userId"><option value="">all</option></select>
+          <select id="errors-service"><option value="">all</option></select>
         </label>
         <label>from
           <input type="datetime-local" id="errors-from" />
@@ -153,6 +154,20 @@
       </div>
       <div id="token-error" class="error" style="display:none"></div>
       <textarea id="token-output" readonly rows="4" placeholder="JWT will appear here…" style="width:100%;margin-top:1rem;font-family:monospace;font-size:0.85rem;resize:vertical"></textarea>
+
+      <h3 style="margin-top:2rem">decode token</h3>
+      <div class="filters">
+        <label style="flex:1">token<textarea id="token-decode-input" rows="3" placeholder="Paste a JWT here…" style="width:100%;font-family:monospace;font-size:0.85rem;resize:vertical"></textarea></label>
+        <div class="filter-actions">
+          <button id="token-decode-btn">decode</button>
+        </div>
+      </div>
+      <div id="token-decode-error" class="error" style="display:none"></div>
+      <textarea id="token-decode-output" readonly rows="6" placeholder="Decoded payload will appear here…" style="width:100%;margin-top:1rem;font-family:monospace;font-size:0.85rem;resize:vertical"></textarea>
+    </div>
+
+    <div id="tab-docs" class="tab-panel" hidden style="padding:0">
+      <iframe src="/docs" style="width:100%;height:calc(100vh - 120px);border:none;display:block"></iframe>
     </div>
   </div>
 

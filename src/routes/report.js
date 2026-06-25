@@ -12,30 +12,29 @@ router.get('/', authenticate, async (req, res) => {
     const toVal = to || null;
 
     const [logs] = await pool.execute(
-      `SELECT id, user_id, environment, service, data, timestamp
+      `SELECT id, service, environment, data, timestamp
        FROM logger_logs
-       WHERE user_id = ?
+       WHERE service = ?
          AND (? IS NULL OR timestamp >= ?)
          AND (? IS NULL OR timestamp <= ?)
        ORDER BY timestamp DESC
        LIMIT ? OFFSET ?`,
-      [req.userId, fromVal, fromVal, toVal, toVal, Number(limit), Number(skip)]
+      [req.service, fromVal, fromVal, toVal, toVal, Number(limit), Number(skip)]
     );
 
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
        FROM logger_logs
-       WHERE user_id = ?
+       WHERE service = ?
          AND (? IS NULL OR timestamp >= ?)
          AND (? IS NULL OR timestamp <= ?)`,
-      [req.userId, fromVal, fromVal, toVal, toVal]
+      [req.service, fromVal, fromVal, toVal, toVal]
     );
 
     const mapped = logs.map((row) => ({
       _id: row.id,
-      userId: row.user_id,
-      environment: row.environment,
       service: row.service,
+      environment: row.environment,
       data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
       timestamp: row.timestamp,
     }));
