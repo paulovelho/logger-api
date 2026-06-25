@@ -28,7 +28,7 @@ read -r -s -p "MySQL root password (leave blank if passwordless): " ROOT_PASS
 echo ""
 
 if [[ -z "$ROOT_PASS" ]]; then
-  MYSQL_CMD="mysql -h $DB_HOST -P $DB_PORT -u $ROOT_USER --ssl=0"
+  MYSQL_CMD="sudo mysql -u $ROOT_USER"
 else
   MYSQL_CMD="mysql -h $DB_HOST -P $DB_PORT -u $ROOT_USER -p$ROOT_PASS"
 fi
