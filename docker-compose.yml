@@ -3,12 +3,6 @@ services:
   guia_lol-logger:
     build: .
     container_name: guia_lol-logger
-    ports:
-      - "3002:3002"
+    network_mode: host
     env_file: .env
-    networks:
-      - guialolnetwork
-
-networks:
-  guialolnetwork:
-    external: true
+    restart: unless-stopped
