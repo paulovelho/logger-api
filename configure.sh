@@ -85,7 +85,7 @@ with open(config_path, 'w') as f:
     json.dump(d, f, indent=2)
     f.write('\n')
 
-print(f"Added '{NEW_NAME}' (service: '$NEW_ID') to config.json")
+print(f"Added '$NEW_NAME' (service: '$NEW_ID') to config.json")
 PYEOF
 
 echo ""
