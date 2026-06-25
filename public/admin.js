@@ -2,11 +2,11 @@ const $ = (id) => document.getElementById(id);
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
-function getToken() { return sessionStorage.getItem('admin_token'); }
-function setToken(t) { sessionStorage.setItem('admin_token', t); }
-function clearToken() { sessionStorage.removeItem('admin_token'); }
-function getUser() { return sessionStorage.getItem('admin_user'); }
-function setUser(u) { sessionStorage.setItem('admin_user', u); }
+function getToken() { return localStorage.getItem('admin_token'); }
+function setToken(t) { localStorage.setItem('admin_token', t); }
+function clearToken() { localStorage.removeItem('admin_token'); }
+function getUser() { return localStorage.getItem('admin_user'); }
+function setUser(u) { localStorage.setItem('admin_user', u); }
 
 function authHeaders() {
   return { Authorization: 'Bearer ' + getToken() };
@@ -40,21 +40,21 @@ function showApp() {
 
 $('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const userId = $('login-userid').value.trim();
+  const service = $('login-userid').value.trim();
   const secret = $('login-secret').value.trim();
   $('login-error').textContent = '';
-  if (!userId || !secret) return;
+  if (!service || !secret) return;
 
   try {
     const res = await fetch('/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, secret }),
+      body: JSON.stringify({ service, secret }),
     });
     if (!res.ok) { $('login-error').textContent = 'Invalid credentials.'; return; }
     const { token } = await res.json();
     setToken(token);
-    setUser(userId);
+    setUser(service);
     showApp();
     init();
   } catch {
@@ -136,7 +136,7 @@ let logsTotal = 0;
 async function loadLogs() {
   const limit = Number($('logs-limit').value);
   const params = new URLSearchParams({ limit, skip: logsSkip });
-  if ($('logs-userId').value) params.set('userId', $('logs-userId').value);
+  if ($('logs-service').value) params.set('service', $('logs-service').value);
   if ($('logs-from').value) params.set('from', new Date($('logs-from').value).toISOString());
   if ($('logs-to').value) params.set('to', new Date($('logs-to').value).toISOString());
 
@@ -150,7 +150,7 @@ async function loadLogs() {
 
     rows.innerHTML = '';
     for (const log of data.logs) {
-      rows.appendChild(makeRow(log.timestamp, log.userId, log.data));
+      rows.appendChild(makeRow(log.timestamp, log.service, log.data));
     }
 
     $('logs-summary').textContent = `${logsTotal} total — showing ${data.count}`;
@@ -176,7 +176,7 @@ let errorsTotal = 0;
 async function loadErrors() {
   const limit = Number($('errors-limit').value);
   const params = new URLSearchParams({ limit, skip: errorsSkip });
-  if ($('errors-userId').value) params.set('userId', $('errors-userId').value);
+  if ($('errors-service').value) params.set('service', $('errors-service').value);
   if ($('errors-from').value) params.set('from', new Date($('errors-from').value).toISOString());
   if ($('errors-to').value) params.set('to', new Date($('errors-to').value).toISOString());
 
@@ -190,7 +190,7 @@ async function loadErrors() {
 
     rows.innerHTML = '';
     for (const err of data.errors) {
-      rows.appendChild(makeRow(err.timestamp, err.userId, err.data));
+      rows.appendChild(makeRow(err.timestamp, err.service, err.data));
     }
 
     $('errors-summary').textContent = `${errorsTotal} total — showing ${data.count}`;
@@ -216,15 +216,15 @@ async function loadServices() {
   const { services } = await res.json();
 
   // Populate service filter selects
-  ['logs-userId', 'errors-userId'].forEach((selId) => {
+  ['logs-service', 'errors-service'].forEach((selId) => {
     const sel = $(selId);
     const current = sel.value;
     sel.innerHTML = '<option value="">all</option>';
     for (const s of services) {
       const opt = document.createElement('option');
-      opt.value = s.userId;
-      opt.textContent = `${s.userId} (${s.count})`;
-      if (s.userId === current) opt.selected = true;
+      opt.value = s.service;
+      opt.textContent = `${s.service} (${s.count})`;
+      if (s.service === current) opt.selected = true;
       sel.appendChild(opt);
     }
   });
@@ -239,12 +239,12 @@ async function loadServices() {
     card.className = 'service-card';
     const last = s.lastLog ? new Date(s.lastLog).toLocaleString() : 'never';
     card.innerHTML = `
-      <div class="service-name">${s.userId}</div>
+      <div class="service-name">${s.service}</div>
       <div class="service-stat">${s.count.toLocaleString()} logs</div>
       <div class="service-last">last activity ${last}</div>
     `;
     card.addEventListener('click', () => {
-      $('logs-userId').value = s.userId;
+      $('logs-service').value = s.service;
       logsSkip = 0;
       document.querySelector('.tab[data-tab="logs"]').click();
       loadLogs();
@@ -255,7 +255,7 @@ async function loadServices() {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-function makeRow(timestamp, userId, data) {
+function makeRow(timestamp, service, data) {
   const tr = document.createElement('tr');
 
   const ts = document.createElement('td');
@@ -264,7 +264,7 @@ function makeRow(timestamp, userId, data) {
 
   const uid = document.createElement('td');
   uid.className = 'uid';
-  uid.textContent = userId;
+  uid.textContent = service;
 
   const dataCell = document.createElement('td');
   const pre = document.createElement('pre');
@@ -274,7 +274,7 @@ function makeRow(timestamp, userId, data) {
   pre.appendChild(code);
   dataCell.appendChild(pre);
 
-  Prism.highlightElement(code);
+  if (typeof Prism !== 'undefined') Prism.highlightElement(code);
 
   tr.append(ts, uid, dataCell);
   tr.addEventListener('click', () => tr.classList.toggle('expanded'));
@@ -292,14 +292,14 @@ function updatePager(panel, skip, limit, total) {
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 $('token-get').addEventListener('click', async () => {
-  const userId = $('token-userid').value.trim();
+  const service = $('token-userid').value.trim();
   const secret = $('token-secret').value.trim();
   const errorEl = $('token-error');
   const output = $('token-output');
   errorEl.style.display = 'none';
   output.value = '';
 
-  if (!userId || !secret) {
+  if (!service || !secret) {
     errorEl.textContent = 'Enter user id and secret.';
     errorEl.style.display = 'block';
     return;
@@ -309,12 +309,46 @@ $('token-get').addEventListener('click', async () => {
     const res = await fetch('/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, secret }),
+      body: JSON.stringify({ service, secret }),
     });
     if (!res.ok) { errorEl.textContent = 'Invalid credentials.'; errorEl.style.display = 'block'; return; }
     const { token } = await res.json();
     output.value = token;
     output.select();
+  } catch {
+    errorEl.textContent = 'Request failed. Is the server reachable?';
+    errorEl.style.display = 'block';
+  }
+});
+
+// ── Token decode ──────────────────────────────────────────────────────────────
+
+$('token-decode-btn').addEventListener('click', async () => {
+  const token = $('token-decode-input').value.trim();
+  const errorEl = $('token-decode-error');
+  const output = $('token-decode-output');
+  errorEl.style.display = 'none';
+  output.value = '';
+
+  if (!token) {
+    errorEl.textContent = 'Paste a token first.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch('/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Invalid token.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    output.value = JSON.stringify(data.decoded, null, 2);
   } catch {
     errorEl.textContent = 'Request failed. Is the server reachable?';
     errorEl.style.display = 'block';

@@ -5,7 +5,7 @@ info:
     Flexible logging microservice for the **guia.lol** project.
     Services authenticate via JWT and log arbitrary JSON data, each isolated to their own logs.
 
-    Service credentials live in `config.json` (userId + secret pairs). The `userId` is always
+    Service credentials live in `config.json` (service + secret pairs). The `service` is always
     taken from the JWT, never from the request body.
   version: 1.0.0
 servers:
@@ -26,7 +26,7 @@ paths:
     post:
       tags: [Auth]
       summary: Get a JWT token
-      description: Validates a service's `userId` + `secret` against `config.json` and returns a JWT.
+      description: Validates a service's `service` + `secret` against `config.json` and returns a JWT.
       operationId: login
       requestBody:
         required: true
@@ -34,9 +34,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [userId, secret]
+              required: [service, secret]
               properties:
-                userId:
+                service:
                   type: string
                   example: my-service
                 secret:
@@ -65,7 +65,7 @@ paths:
       summary: Ingest a log entry
       description: |
         Stores the request body (minus `environment`) as the `data` field of a new log entry.
-        Any JSON structure is accepted; `userId` comes from the JWT.
+        Any JSON structure is accepted; `service` comes from the JWT.
         `environment` is extracted as a top-level field and defaults to `unknown` if omitted.
       operationId: createLog
       security:
@@ -83,14 +83,8 @@ paths:
                   description: Deployment environment (e.g. production, staging, development)
                   default: unknown
                   example: production
-                service:
-                  type: string
-                  description: Service or component name within the calling application
-                  default: unknown
-                  example: crawler
               example:
                 environment: production
-                service: crawler
                 event: user.signup
                 email: user@example.com
                 meta:
@@ -142,9 +136,9 @@ paths:
       tags: [Errors]
       summary: Ingest an error entry
       description: |
-        Stores the request body (minus `environment` and `service`) as the `data` field of a new error entry.
-        Any JSON structure is accepted; `userId` comes from the JWT.
-        `environment` and `service` are extracted as top-level fields and default to `unknown` if omitted.
+        Stores the request body (minus `environment`) as the `data` field of a new error entry.
+        Any JSON structure is accepted; `service` comes from the JWT.
+        `environment` is extracted as a top-level field and defaults to `unknown` if omitted.
       operationId: createError
       security:
         - bearerAuth: []
@@ -161,14 +155,8 @@ paths:
                   description: Deployment environment (e.g. production, staging, development)
                   default: unknown
                   example: production
-                service:
-                  type: string
-                  description: Service or component name where the error occurred
-                  default: unknown
-                  example: crawler
               example:
                 environment: production
-                service: crawler
                 message: "Failed to fetch page"
                 stack: "Error: ECONNREFUSED\n    at ..."
                 url: "https://example.com/event/123"
@@ -234,16 +222,11 @@ paths:
     get:
       tags: [Admin]
       summary: Query logs across all services
-      description: Same as `/report` but cross-service, with optional `userId` and `service` filters. JWT required.
+      description: Same as `/report` but cross-service, with optional `service` filter. JWT required.
       operationId: adminLogs
       security:
         - bearerAuth: []
       parameters:
-        - name: userId
-          in: query
-          description: Filter by service credential
-          schema:
-            type: string
         - name: service
           in: query
           description: Filter by service name
@@ -273,16 +256,11 @@ paths:
     get:
       tags: [Admin]
       summary: Query errors across all services
-      description: Same as `/errors` but cross-service, with optional `userId` and `service` filters. JWT required.
+      description: Same as `/errors` but cross-service, with optional `service` filter. JWT required.
       operationId: adminErrors
       security:
         - bearerAuth: []
       parameters:
-        - name: userId
-          in: query
-          description: Filter by service credential
-          schema:
-            type: string
         - name: service
           in: query
           description: Filter by service name
@@ -329,7 +307,7 @@ paths:
                     items:
                       type: object
                       properties:
-                        userId:
+                        service:
                           type: string
                           example: my-service
                         count:
@@ -385,15 +363,12 @@ components:
         _id:
           type: string
           example: 42
-        userId:
+        service:
           type: string
           example: my-service
         environment:
           type: string
           example: production
-        service:
-          type: string
-          example: crawler
         data:
           description: Arbitrary JSON payload as submitted by the service
           example:
@@ -423,15 +398,12 @@ components:
         _id:
           type: string
           example: 42
-        userId:
+        service:
           type: string
           example: my-service
         environment:
           type: string
           example: production
-        service:
-          type: string
-          example: crawler
         data:
           description: Arbitrary JSON payload describing the error
           example:
