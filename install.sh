@@ -24,10 +24,14 @@ echo ""
 # ── 2. Prompt for MySQL root credentials ─────────────────────────────────────
 read -r -p "MySQL root user [root]: " ROOT_USER
 ROOT_USER="${ROOT_USER:-root}"
-read -r -s -p "MySQL root password: " ROOT_PASS
+read -r -s -p "MySQL root password (leave blank if passwordless): " ROOT_PASS
 echo ""
 
-MYSQL_CMD="mysql -h "$DB_HOST" -P "$DB_PORT" -u "$ROOT_USER" -p"$ROOT_PASS""
+if [[ -z "$ROOT_PASS" ]]; then
+  MYSQL_CMD="mysql -h $DB_HOST -P $DB_PORT -u $ROOT_USER"
+else
+  MYSQL_CMD="mysql -h $DB_HOST -P $DB_PORT -u $ROOT_USER -p$ROOT_PASS"
+fi
 
 # ── 3. Create DB + user + permissions ────────────────────────────────────────
 echo "Creating database and user..."
