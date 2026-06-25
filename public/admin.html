@@ -4,48 +4,147 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Logger Admin</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
   <link rel="stylesheet" href="/admin.css" />
 </head>
 <body>
-  <h1>Logger Admin — all services</h1>
 
-  <div class="filters">
-    <label>service
-      <select id="userId"><option value="">all</option></select>
-    </label>
-    <label>from
-      <input type="datetime-local" id="from" />
-    </label>
-    <label>to
-      <input type="datetime-local" id="to" />
-    </label>
-    <label>per page
-      <select id="limit">
-        <option>25</option>
-        <option selected>50</option>
-        <option>100</option>
-        <option>250</option>
-      </select>
-    </label>
-    <button id="apply">apply</button>
-    <button id="refresh">refresh</button>
+  <div id="login-overlay">
+    <form id="login-form" class="login-box">
+      <h2>Logger Admin</h2>
+      <p class="login-sub">Sign in with a service credential</p>
+      <label>user id<input id="login-userid" type="text" autocomplete="username" /></label>
+      <label>secret<input id="login-secret" type="password" autocomplete="current-password" /></label>
+      <div id="login-error"></div>
+      <button type="submit">sign in</button>
+    </form>
   </div>
 
-  <div class="summary" id="summary"></div>
+  <div id="app" hidden>
+    <header>
+      <h1>Logger Admin</h1>
+      <div class="header-actions">
+        <span id="logged-as"></span>
+        <button id="logout-btn">sign out</button>
+      </div>
+    </header>
 
-  <table>
-    <thead>
-      <tr><th>timestamp</th><th>service</th><th>data</th></tr>
-    </thead>
-    <tbody id="rows"></tbody>
-  </table>
+    <nav class="tabs">
+      <button class="tab active" data-tab="logs">logs</button>
+      <button class="tab" data-tab="errors">errors</button>
+      <button class="tab" data-tab="services">services</button>
+    </nav>
 
-  <div class="pager">
-    <button id="prev">&laquo; prev</button>
-    <span id="page"></span>
-    <button id="next">next &raquo;</button>
+    <div id="tab-logs" class="tab-panel">
+      <div class="filters">
+        <label>service
+          <select id="logs-userId"><option value="">all</option></select>
+        </label>
+        <label>from
+          <input type="datetime-local" id="logs-from" />
+        </label>
+        <label>to
+          <input type="datetime-local" id="logs-to" />
+        </label>
+        <label>per page
+          <select id="logs-limit">
+            <option>25</option>
+            <option selected>50</option>
+            <option>100</option>
+            <option>250</option>
+          </select>
+        </label>
+        <div class="filter-actions">
+          <div class="presets">
+            <button class="preset" data-hours="1">1h</button>
+            <button class="preset" data-hours="24">24h</button>
+            <button class="preset" data-hours="168">7d</button>
+            <button class="preset" data-clear>all</button>
+          </div>
+          <button id="logs-apply">apply</button>
+          <button id="logs-refresh">refresh</button>
+          <label class="autorefresh-label">
+            <input type="checkbox" id="logs-autorefresh" /> auto
+            <select id="logs-autorefresh-interval">
+              <option value="5">5s</option>
+              <option value="15" selected>15s</option>
+              <option value="30">30s</option>
+              <option value="60">1m</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="summary" id="logs-summary"></div>
+      <table>
+        <thead><tr><th>timestamp</th><th>service</th><th>data</th></tr></thead>
+        <tbody id="logs-rows"></tbody>
+      </table>
+      <div class="pager">
+        <button id="logs-prev">&laquo; prev</button>
+        <span id="logs-page"></span>
+        <button id="logs-next">next &raquo;</button>
+      </div>
+    </div>
+
+    <div id="tab-errors" class="tab-panel" hidden>
+      <div class="filters">
+        <label>service
+          <select id="errors-userId"><option value="">all</option></select>
+        </label>
+        <label>from
+          <input type="datetime-local" id="errors-from" />
+        </label>
+        <label>to
+          <input type="datetime-local" id="errors-to" />
+        </label>
+        <label>per page
+          <select id="errors-limit">
+            <option>25</option>
+            <option selected>50</option>
+            <option>100</option>
+            <option>250</option>
+          </select>
+        </label>
+        <div class="filter-actions">
+          <div class="presets">
+            <button class="preset" data-hours="1">1h</button>
+            <button class="preset" data-hours="24">24h</button>
+            <button class="preset" data-hours="168">7d</button>
+            <button class="preset" data-clear>all</button>
+          </div>
+          <button id="errors-apply">apply</button>
+          <button id="errors-refresh">refresh</button>
+          <label class="autorefresh-label">
+            <input type="checkbox" id="errors-autorefresh" /> auto
+            <select id="errors-autorefresh-interval">
+              <option value="5">5s</option>
+              <option value="15" selected>15s</option>
+              <option value="30">30s</option>
+              <option value="60">1m</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="summary" id="errors-summary"></div>
+      <table>
+        <thead><tr><th>timestamp</th><th>service</th><th>data</th></tr></thead>
+        <tbody id="errors-rows"></tbody>
+      </table>
+      <div class="pager">
+        <button id="errors-prev">&laquo; prev</button>
+        <span id="errors-page"></span>
+        <button id="errors-next">next &raquo;</button>
+      </div>
+    </div>
+
+    <div id="tab-services" class="tab-panel" hidden>
+      <div class="summary" id="services-summary"></div>
+      <div id="services-grid"></div>
+    </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>

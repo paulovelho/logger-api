@@ -12,7 +12,7 @@ The API runs on `http://localhost:3000`.
 
 ## Configuration
 
-**`.env`** — JWT secret and MongoDB URI.
+**`.env`** — JWT secret and MySQL connection settings.
 
 **`config.json`** — Service credentials (userId + secret pairs). Add new services here.
 
@@ -81,6 +81,38 @@ Response:
     }
   ]
 }
+```
+
+### POST /error
+
+Ingest an error entry. `environment` and `service` are extracted as top-level fields; everything else goes into `data`.
+
+```bash
+curl -X POST http://localhost:3000/error \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"environment": "production", "service": "crawler", "message": "Timeout", "url": "https://example.com"}'
+```
+
+### GET /errors
+
+Retrieve error entries for the authenticated service. Supports the same filtering and pagination as `/report`.
+
+```bash
+curl http://localhost:3000/errors \
+  -H "Authorization: Bearer <token>"
+```
+
+### GET /admin/logs, /admin/errors, /admin/services
+
+Cross-service admin queries. Require a valid Bearer token (any service credential works). The `/admin` dashboard at `http://localhost:3000/admin` provides a UI for these endpoints with a login form.
+
+```bash
+curl http://localhost:3000/admin/logs?limit=50 \
+  -H "Authorization: Bearer <token>"
+
+curl http://localhost:3000/admin/services \
+  -H "Authorization: Bearer <token>"
 ```
 
 ### GET /health

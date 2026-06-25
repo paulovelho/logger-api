@@ -5,6 +5,8 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/log');
 const reportRoutes = require('./routes/report');
+const errorRoutes = require('./routes/error');
+const errorsRoutes = require('./routes/errors');
 const adminRoutes = require('./routes/admin');
 
 dotenv.config();
@@ -17,6 +19,8 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/login', authRoutes);
 app.use('/log', logRoutes);
 app.use('/report', reportRoutes);
+app.use('/error', errorRoutes);
+app.use('/errors', errorsRoutes);
 app.use('/admin', adminRoutes);
 
 app.get('/admin', (_req, res) =>
