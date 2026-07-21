@@ -113,13 +113,13 @@ Response (200):
 
 ---
 
-### GET /health — Health check
+### GET /health-check — Health check
 
 ```bash
-curl https://log.guia.lol/health
+curl https://log.guia.lol/health-check
 ```
 
-Response: `{"status": "ok"}`
+Response: `{"success": true, "data": {"health": "ok", "database": "ok", "time": "2026-07-20 22:59:48"}}`
 
 ---
 

@@ -115,10 +115,16 @@ curl http://localhost:3000/admin/services \
   -H "Authorization: Bearer <token>"
 ```
 
-### GET /health
+### GET /health-check
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3000/health-check
+```
+
+### GET /version
+
+```bash
+curl http://localhost:3000/version
 ```
 
 ## Adding a new service

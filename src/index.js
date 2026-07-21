@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -9,6 +10,7 @@ const errorRoutes = require('./routes/error');
 const errorsRoutes = require('./routes/errors');
 const adminRoutes = require('./routes/admin');
 const tokenRoutes = require('./routes/token');
+const pool = require('./db');
 
 dotenv.config();
 
@@ -39,11 +41,34 @@ app.get('/openapi.yaml', (_req, res) =>
   res.sendFile(path.join(__dirname, '..', 'openapi.yaml'))
 );
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/version', (_req, res) => {
+  const version = fs.readFileSync(path.join(__dirname, '..', 'version'), 'utf8').trim();
+  res.json({ success: true, data: { version } });
+});
+
+app.get('/health-check', async (_req, res) => {
+  let database = 'ok';
+  try {
+    const conn = await pool.getConnection();
+    conn.release();
+  } catch (err) {
+    database = 'fail';
+  }
+
+  const now = new Date();
+  const time = now.toISOString().slice(0, 19).replace('T', ' ');
+
+  res.json({
+    success: true,
+    data: {
+      health: 'ok',
+      database,
+      time,
+    },
+  });
+});
 
 const PORT = process.env.PORT || 3000;
-
-const pool = require('./db');
 
 pool.getConnection()
   .then((conn) => {

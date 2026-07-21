@@ -55,7 +55,8 @@ npm run dev                   # Local dev with --watch (needs local MySQL)
 | GET    | /report         | Bearer   | Query own logs (from, to, limit, skip)               |
 | POST   | /error          | Bearer   | Ingest any JSON payload as an error entry            |
 | GET    | /errors         | Bearer   | Query own errors (from, to, limit, skip)             |
-| GET    | /health         | No       | Health check                                         |
+| GET    | /health-check   | No       | Health check (includes DB connectivity status)       |
+| GET    | /version        | No       | Returns service version (from `version` file)        |
 | GET    | /admin          | No       | Admin dashboard UI (login form; data fetched via Bearer) |
 | GET    | /admin/logs     | Bearer   | All logs, any service (userId, service, from, to, limit, skip) |
 | GET    | /admin/errors   | Bearer   | All errors, any service (userId, service, from, to, limit, skip) |

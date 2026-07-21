@@ -202,11 +202,11 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
-  /health:
+  /health-check:
     get:
       tags: [System]
       summary: Health check
-      operationId: health
+      operationId: healthCheck
       responses:
         '200':
           description: Service is up
@@ -215,9 +215,43 @@ paths:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                    example: ok
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      health:
+                        type: string
+                        example: ok
+                      database:
+                        type: string
+                        example: ok
+                      time:
+                        type: string
+                        example: '2026-07-20 22:59:48'
+  /version:
+    get:
+      tags: [System]
+      summary: Get service version
+      operationId: getVersion
+      responses:
+        '200':
+          description: Current service version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                        example: '1.0.0'
   /admin/logs:
     get:
       tags: [Admin]
