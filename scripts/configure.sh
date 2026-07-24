@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG="$(dirname "$0")/config.json"
+# config.json lives at the project root, one level up from this script.
+CONFIG="$(dirname "$0")/../config.json"
 
 # Validate config.json
 if [[ ! -f "$CONFIG" ]]; then

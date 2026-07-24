@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+# Always run from the project root, wherever this script is called from.
+cd "$(dirname "$0")/.."
+
 echo "WARNING: this will permanently erase ALL logged data."
 read -r -p 'Type "erase" to confirm: ' confirm
 

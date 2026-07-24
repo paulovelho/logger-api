@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENV_FILE="$SCRIPT_DIR/.env"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$ROOT/.env"
 
 # ── 1. Check .env ────────────────────────────────────────────────────────────
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -47,7 +48,7 @@ echo "Database and user ready."
 echo ""
 
 # ── 4. Apply schema ───────────────────────────────────────────────────────────
-SCHEMA="$SCRIPT_DIR/database/schema.sql"
+SCHEMA="$ROOT/database/schema.sql"
 echo "Applying schema from $SCHEMA..."
 $MYSQL_CMD "$DB_NAME" < "$SCHEMA"
 echo "Schema applied."

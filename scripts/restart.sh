@@ -3,6 +3,9 @@
 # and confirms it's actually running afterwards.
 set -e
 
+# Always run from the project root, wherever this script is called from.
+cd "$(dirname "$0")/.."
+
 CONTAINER="guia_lol-logger"
 
 echo "Pulling latest changes..."
