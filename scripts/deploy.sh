@@ -10,10 +10,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CONFIG_FILE="$ROOT/docker/deploy-config.sh"
+CONFIG_FILE="$ROOT/deploy-config.sh"
 
 if [ ! -f "$CONFIG_FILE" ]; then
-	echo "Missing $CONFIG_FILE (copy deploy-config.sh.sample and fill it in)." >&2
+	echo "Missing $CONFIG_FILE (copy docker/deploy-config.sh.sample and fill it in)." >&2
 	exit 1
 fi
 

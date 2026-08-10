@@ -2,11 +2,12 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const authenticate = require('../middleware/auth');
+const requireReadonly = require('../middleware/require-readonly');
 const config = require('../../config.json');
 
 const router = express.Router();
 
-router.get('/logs', authenticate, async (req, res) => {
+router.get('/logs', authenticate, requireReadonly, async (req, res) => {
   try {
     const { service, from, to, limit = 100, skip = 0 } = req.query;
 
@@ -48,7 +49,7 @@ router.get('/logs', authenticate, async (req, res) => {
   }
 });
 
-router.get('/errors', authenticate, async (req, res) => {
+router.get('/errors', authenticate, requireReadonly, async (req, res) => {
   try {
     const { service, from, to, limit = 100, skip = 0 } = req.query;
 
@@ -90,7 +91,7 @@ router.get('/errors', authenticate, async (req, res) => {
   }
 });
 
-router.get('/services', authenticate, async (_req, res) => {
+router.get('/services', authenticate, requireReadonly, async (_req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT service, COUNT(*) AS count, MAX(timestamp) AS lastLog

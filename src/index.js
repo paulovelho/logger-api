@@ -14,8 +14,10 @@ const pool = require('./db');
 
 dotenv.config();
 
+const corsOrigins = require('../cors-origins.json');
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
