@@ -211,45 +211,51 @@ $('errors-autorefresh-interval').addEventListener('change', () => syncAutoRefres
 // ── Services ──────────────────────────────────────────────────────────────────
 
 async function loadServices() {
-  const res = await authedFetch('/admin/services');
-  if (!res) return;
-  const { services } = await res.json();
-
-  // Populate service filter selects
-  ['logs-service', 'errors-service'].forEach((selId) => {
-    const sel = $(selId);
-    const current = sel.value;
-    sel.innerHTML = '<option value="">all</option>';
-    for (const s of services) {
-      const opt = document.createElement('option');
-      opt.value = s.service;
-      opt.textContent = s.service;
-      if (s.service === current) opt.selected = true;
-      sel.appendChild(opt);
-    }
-  });
-
-  // Render services tab
   const grid = $('services-grid');
-  grid.innerHTML = '';
-  $('services-summary').textContent = `${services.length} service${services.length !== 1 ? 's' : ''}`;
+  try {
+    const res = await authedFetch('/admin/services');
+    if (!res) return;
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const { services } = await res.json();
 
-  for (const s of services) {
-    const card = document.createElement('div');
-    card.className = 'service-card';
-    const last = s.lastLog ? new Date(s.lastLog).toLocaleString() : 'never';
-    card.innerHTML = `
-      <div class="service-name">${s.service}</div>
-      <div class="service-stat">${s.count.toLocaleString()} logs</div>
-      <div class="service-last">last activity ${last}</div>
-    `;
-    card.addEventListener('click', () => {
-      $('errors-service').value = s.service;
-      errorsSkip = 0;
-      document.querySelector('.tab[data-tab="errors"]').click();
-      loadErrors();
+    // Populate service filter selects
+    ['logs-service', 'errors-service'].forEach((selId) => {
+      const sel = $(selId);
+      const current = sel.value;
+      sel.innerHTML = '<option value="">all</option>';
+      for (const s of services) {
+        const opt = document.createElement('option');
+        opt.value = s.service;
+        opt.textContent = s.service;
+        if (s.service === current) opt.selected = true;
+        sel.appendChild(opt);
+      }
     });
-    grid.appendChild(card);
+
+    // Render services tab
+    grid.innerHTML = '';
+    $('services-summary').textContent = `${services.length} service${services.length !== 1 ? 's' : ''}`;
+
+    for (const s of services) {
+      const card = document.createElement('div');
+      card.className = 'service-card';
+      const last = s.lastLog ? new Date(s.lastLog).toLocaleString() : 'never';
+      card.innerHTML = `
+        <div class="service-name">${s.service}</div>
+        <div class="service-stat">${s.count.toLocaleString()} logs</div>
+        <div class="service-last">last activity ${last}</div>
+      `;
+      card.addEventListener('click', () => {
+        $('errors-service').value = s.service;
+        errorsSkip = 0;
+        document.querySelector('.tab[data-tab="errors"]').click();
+        loadErrors();
+      });
+      grid.appendChild(card);
+    }
+  } catch (err) {
+    grid.innerHTML = '';
+    $('services-summary').innerHTML = `<span class="error">Failed to load: ${err.message}</span>`;
   }
 }
 

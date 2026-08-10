@@ -99,12 +99,14 @@ router.get('/services', authenticate, requireReadonly, async (_req, res) => {
        GROUP BY service`
     );
     const byService = Object.fromEntries(rows.map((r) => [r.service, r]));
-    const services = config.users.map((u) => ({
-      service: u.service,
-      name: u.name || u.service,
-      count: byService[u.service]?.count ?? 0,
-      lastLog: byService[u.service]?.lastLog ?? null,
-    }));
+    const services = config.users
+      .filter((u) => u.active !== false)
+      .map((u) => ({
+        service: u.service,
+        name: u.name || u.service,
+        count: byService[u.service]?.count ?? 0,
+        lastLog: byService[u.service]?.lastLog ?? null,
+      }));
     services.sort((a, b) => (b.lastLog ?? '') < (a.lastLog ?? '') ? -1 : 1);
     res.json({ services });
   } catch (err) {

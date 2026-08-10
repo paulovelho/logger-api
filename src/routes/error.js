@@ -1,10 +1,11 @@
 const express = require('express');
 const pool = require('../db');
 const authenticate = require('../middleware/auth');
+const requireActive = require('../middleware/require-active');
 
 const router = express.Router();
 
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, requireActive, async (req, res) => {
   try {
     const { environment = 'unknown', ...data } = req.body;
     const [result] = await pool.execute(

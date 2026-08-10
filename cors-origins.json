@@ -1,8 +1,9 @@
 [
+  "https://guia.lol",
   "https://admin.guia.lol",
   "https://camarim.guia.lol",
-  "https://guia.lol",
-  "https://status.guia.lol",
   "https://crawler.guia.lol",
+  "https://logger.guia.lol",
+  "https://status.guia.lol",
   "http://localhost:4200"
 ]
