@@ -400,6 +400,10 @@ components:
         service:
           type: string
           example: my-service
+        serviceName:
+          type: string
+          description: Human-readable service name from config.json
+          example: My Service
         environment:
           type: string
           example: production
@@ -435,6 +439,10 @@ components:
         service:
           type: string
           example: my-service
+        serviceName:
+          type: string
+          description: Human-readable service name from config.json
+          example: My Service
         environment:
           type: string
           example: production

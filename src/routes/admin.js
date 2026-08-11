@@ -4,6 +4,7 @@ const pool = require('../db');
 const authenticate = require('../middleware/auth');
 const requireReadonly = require('../middleware/require-readonly');
 const config = require('../../config.json');
+const getServiceName = require('../utils/service-name');
 
 const router = express.Router();
 
@@ -38,6 +39,7 @@ router.get('/logs', authenticate, requireReadonly, async (req, res) => {
     const mapped = logs.map((row) => ({
       _id: row.id,
       service: row.service,
+      serviceName: getServiceName(row.service),
       environment: row.environment,
       data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
       timestamp: row.timestamp,
@@ -80,6 +82,7 @@ router.get('/errors', authenticate, requireReadonly, async (req, res) => {
     const mapped = errors.map((row) => ({
       _id: row.id,
       service: row.service,
+      serviceName: getServiceName(row.service),
       environment: row.environment,
       data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
       timestamp: row.timestamp,

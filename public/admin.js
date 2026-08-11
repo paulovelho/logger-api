@@ -150,7 +150,7 @@ async function loadLogs() {
 
     rows.innerHTML = '';
     for (const log of data.logs) {
-      rows.appendChild(makeRow(log.timestamp, log.service, log.data));
+      rows.appendChild(makeRow(log.timestamp, log.serviceName || log.service, log.data));
     }
 
     $('logs-summary').textContent = `${logsTotal} total — showing ${data.count}`;
@@ -190,7 +190,7 @@ async function loadErrors() {
 
     rows.innerHTML = '';
     for (const err of data.errors) {
-      rows.appendChild(makeRow(err.timestamp, err.service, err.data));
+      rows.appendChild(makeRow(err.timestamp, err.serviceName || err.service, err.data));
     }
 
     $('errors-summary').textContent = `${errorsTotal} total — showing ${data.count}`;
@@ -241,7 +241,7 @@ async function loadServices() {
       card.className = 'service-card';
       const last = s.lastLog ? new Date(s.lastLog).toLocaleString() : 'never';
       card.innerHTML = `
-        <div class="service-name">${s.service}</div>
+        <div class="service-name">${s.name}</div>
         <div class="service-stat">${s.count.toLocaleString()} logs</div>
         <div class="service-last">last activity ${last}</div>
       `;

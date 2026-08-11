@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const authenticate = require('../middleware/auth');
+const getServiceName = require('../utils/service-name');
 
 const router = express.Router();
 
@@ -34,6 +35,7 @@ router.get('/', authenticate, async (req, res) => {
     const mapped = logs.map((row) => ({
       _id: row.id,
       service: row.service,
+      serviceName: getServiceName(row.service),
       environment: row.environment,
       data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
       timestamp: row.timestamp,
