@@ -61,8 +61,8 @@ npm run dev                   # Local dev with --watch (needs local MySQL)
 | GET    | /admin/logs     | Bearer   | All logs, any service (userId, service, from, to, limit, skip) |
 | GET    | /admin/errors   | Bearer   | All errors, any service (userId, service, from, to, limit, skip) |
 | GET    | /admin/services | Bearer   | Per-service log counts + last activity               |
-| DELETE | /admin/logs     | Bearer   | Purge logs for one service older than `olderThanDays` (default 7); `service` required |
-| DELETE | /admin/errors   | Bearer   | Purge errors for one service older than `olderThanDays` (default 7); `service` required |
+| DELETE | /admin/logs     | Bearer   | Purge logs for one service older than `olderThanDays` (default 365); `service` required |
+| DELETE | /admin/errors   | Bearer   | Purge errors for one service older than `olderThanDays` (default 365); `service` required |
 | GET    | /docs           | No       | Swagger UI (renders openapi.yaml)                    |
 | GET    | /help           | No       | Redirects to /docs                                   |
 

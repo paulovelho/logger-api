@@ -130,7 +130,7 @@ router.get('/services', authenticate, requireReadonly, async (_req, res) => {
 
 router.delete('/logs', authenticate, requireReadonly, async (req, res) => {
   try {
-    const { service, olderThanDays = 7 } = req.query;
+    const { service, olderThanDays = 365 } = req.query;
     if (!service) return res.status(400).json({ error: 'service is required' });
 
     const days = Number(olderThanDays);
@@ -162,7 +162,7 @@ router.delete('/logs', authenticate, requireReadonly, async (req, res) => {
 
 router.delete('/errors', authenticate, requireReadonly, async (req, res) => {
   try {
-    const { service, olderThanDays = 7 } = req.query;
+    const { service, olderThanDays = 365 } = req.query;
     if (!service) return res.status(400).json({ error: 'service is required' });
 
     const days = Number(olderThanDays);

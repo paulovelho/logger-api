@@ -289,7 +289,7 @@ paths:
     delete:
       tags: [Admin]
       summary: Purge logs for one service
-      description: Deletes logs for the given `service` older than `olderThanDays` (default 7). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
+      description: Deletes logs for the given `service` older than `olderThanDays` (default 365). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
       operationId: adminDeleteLogs
       security:
         - bearerAuth: []
@@ -305,7 +305,7 @@ paths:
           description: Delete logs older than this many days
           schema:
             type: number
-            default: 7
+            default: 365
       responses:
         '200':
           description: Purge result
@@ -360,7 +360,7 @@ paths:
     delete:
       tags: [Admin]
       summary: Purge errors for one service
-      description: Deletes errors for the given `service` older than `olderThanDays` (default 7). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
+      description: Deletes errors for the given `service` older than `olderThanDays` (default 365). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
       operationId: adminDeleteErrors
       security:
         - bearerAuth: []
@@ -376,7 +376,7 @@ paths:
           description: Delete errors older than this many days
           schema:
             type: number
-            default: 7
+            default: 365
       responses:
         '200':
           description: Purge result
