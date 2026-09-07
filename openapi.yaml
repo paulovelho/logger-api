@@ -286,6 +286,43 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Admin]
+      summary: Purge logs for one service
+      description: Deletes logs for the given `service` older than `olderThanDays` (default 7). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
+      operationId: adminDeleteLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service
+          in: query
+          required: true
+          description: Service to purge logs for
+          schema:
+            type: string
+        - name: olderThanDays
+          in: query
+          description: Delete logs older than this many days
+          schema:
+            type: number
+            default: 7
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    example: 42
+        '400':
+          description: Missing or invalid parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /admin/errors:
     get:
       tags: [Admin]
@@ -316,6 +353,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Admin]
+      summary: Purge errors for one service
+      description: Deletes errors for the given `service` older than `olderThanDays` (default 7). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
+      operationId: adminDeleteErrors
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service
+          in: query
+          required: true
+          description: Service to purge errors for
+          schema:
+            type: string
+        - name: olderThanDays
+          in: query
+          description: Delete errors older than this many days
+          schema:
+            type: number
+            default: 7
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    example: 42
+        '400':
+          description: Missing or invalid parameters
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':

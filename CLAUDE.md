@@ -61,6 +61,8 @@ npm run dev                   # Local dev with --watch (needs local MySQL)
 | GET    | /admin/logs     | Bearer   | All logs, any service (userId, service, from, to, limit, skip) |
 | GET    | /admin/errors   | Bearer   | All errors, any service (userId, service, from, to, limit, skip) |
 | GET    | /admin/services | Bearer   | Per-service log counts + last activity               |
+| DELETE | /admin/logs     | Bearer   | Purge logs for one service older than `olderThanDays` (default 7); `service` required |
+| DELETE | /admin/errors   | Bearer   | Purge errors for one service older than `olderThanDays` (default 7); `service` required |
 | GET    | /docs           | No       | Swagger UI (renders openapi.yaml)                    |
 | GET    | /help           | No       | Redirects to /docs                                   |
 
@@ -69,3 +71,10 @@ npm run dev                   # Local dev with --watch (needs local MySQL)
 - `blueprint.md` contains the full original specification and build history.
 - No tests exist yet.
 - No `node_modules` or lockfile in the repo — run `npm install` before local dev.
+- `'logger'` is a **reserved `service` value** — not a real integration, no
+  credential should ever be registered under that name in `config.json`. The
+  `DELETE /admin/logs` and `DELETE /admin/errors` purge routes write an audit
+  entry back into `logger_logs` under `service: 'logger'` (actions
+  `purge_logs` / `purge_errors`), and `GET /admin/services` synthesizes a
+  `Logger (self)` entry for it so it's selectable in a service picker even
+  though it has no `config.json` credential.

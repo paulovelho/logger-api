@@ -102,7 +102,7 @@ router.get('/services', authenticate, requireReadonly, async (_req, res) => {
        GROUP BY service`
     );
     const byService = Object.fromEntries(rows.map((r) => [r.service, r]));
-    const services = config.users
+    const configured = config.users
       .filter((u) => u.active !== false)
       .map((u) => ({
         service: u.service,
@@ -110,10 +110,85 @@ router.get('/services', authenticate, requireReadonly, async (_req, res) => {
         count: byService[u.service]?.count ?? 0,
         lastLog: byService[u.service]?.lastLog ?? null,
       }));
+
+    const services = [
+      ...configured,
+      {
+        service: 'logger',
+        name: 'Logger (self)',
+        count: byService['logger']?.count ?? 0,
+        lastLog: byService['logger']?.lastLog ?? null,
+      },
+    ];
+
     services.sort((a, b) => (b.lastLog ?? '') < (a.lastLog ?? '') ? -1 : 1);
     res.json({ services });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch services' });
+  }
+});
+
+router.delete('/logs', authenticate, requireReadonly, async (req, res) => {
+  try {
+    const { service, olderThanDays = 7 } = req.query;
+    if (!service) return res.status(400).json({ error: 'service is required' });
+
+    const days = Number(olderThanDays);
+    if (!Number.isFinite(days) || days <= 0) {
+      return res.status(400).json({ error: 'olderThanDays must be a positive number' });
+    }
+
+    const [result] = await pool.execute(
+      `DELETE FROM logger_logs WHERE service = ? AND timestamp < (NOW() - INTERVAL ? DAY)`,
+      [service, days]
+    );
+
+    await pool.execute(
+      `INSERT INTO logger_logs (service, environment, data) VALUES ('logger', 'unknown', ?)`,
+      [JSON.stringify({
+        action: 'purge_logs',
+        targetService: service,
+        cutoffDays: days,
+        deletedCount: result.affectedRows,
+        performedBy: req.service,
+      })]
+    );
+
+    res.json({ deleted: result.affectedRows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to purge logs' });
+  }
+});
+
+router.delete('/errors', authenticate, requireReadonly, async (req, res) => {
+  try {
+    const { service, olderThanDays = 7 } = req.query;
+    if (!service) return res.status(400).json({ error: 'service is required' });
+
+    const days = Number(olderThanDays);
+    if (!Number.isFinite(days) || days <= 0) {
+      return res.status(400).json({ error: 'olderThanDays must be a positive number' });
+    }
+
+    const [result] = await pool.execute(
+      `DELETE FROM logger_errors WHERE service = ? AND timestamp < (NOW() - INTERVAL ? DAY)`,
+      [service, days]
+    );
+
+    await pool.execute(
+      `INSERT INTO logger_logs (service, environment, data) VALUES ('logger', 'unknown', ?)`,
+      [JSON.stringify({
+        action: 'purge_errors',
+        targetService: service,
+        cutoffDays: days,
+        deletedCount: result.affectedRows,
+        performedBy: req.service,
+      })]
+    );
+
+    res.json({ deleted: result.affectedRows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to purge errors' });
   }
 });
 
