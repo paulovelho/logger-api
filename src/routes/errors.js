@@ -12,9 +12,9 @@ router.get('/', authenticate, async (req, res) => {
     const fromVal = from || null;
     const toVal = to || null;
 
-    const [logs] = await pool.execute(
+    const [errors] = await pool.execute(
       `SELECT id, service, environment, data, timestamp
-       FROM logger_logs
+       FROM logger_errors
        WHERE service = ?
          AND (? IS NULL OR timestamp >= ?)
          AND (? IS NULL OR timestamp <= ?)
@@ -25,14 +25,14 @@ router.get('/', authenticate, async (req, res) => {
 
     const [[{ total }]] = await pool.execute(
       `SELECT COUNT(*) AS total
-       FROM logger_logs
+       FROM logger_errors
        WHERE service = ?
          AND (? IS NULL OR timestamp >= ?)
          AND (? IS NULL OR timestamp <= ?)`,
       [req.service, fromVal, fromVal, toVal, toVal]
     );
 
-    const mapped = logs.map((row) => ({
+    const mapped = errors.map((row) => ({
       _id: row.id,
       service: row.service,
       serviceName: getServiceName(row.service),
@@ -41,9 +41,9 @@ router.get('/', authenticate, async (req, res) => {
       timestamp: row.timestamp,
     }));
 
-    res.json({ total, count: mapped.length, logs: mapped });
+    res.json({ total, count: mapped.length, errors: mapped });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch logs' });
+    res.status(500).json({ error: 'Failed to fetch errors' });
   }
 });
 

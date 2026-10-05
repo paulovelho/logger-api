@@ -1,24 +1,33 @@
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/log');
 const reportRoutes = require('./routes/report');
+const errorRoutes = require('./routes/error');
+const errorsRoutes = require('./routes/errors');
 const adminRoutes = require('./routes/admin');
+const tokenRoutes = require('./routes/token');
+const pool = require('./db');
 
 dotenv.config();
 
+const corsOrigins = require('../cors-origins.json');
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: corsOrigins }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/login', authRoutes);
 app.use('/log', logRoutes);
 app.use('/report', reportRoutes);
+app.use('/error', errorRoutes);
+app.use('/errors', errorsRoutes);
 app.use('/admin', adminRoutes);
+app.use('/token', tokenRoutes);
 
 app.get('/admin', (_req, res) =>
   res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'))
@@ -34,17 +43,42 @@ app.get('/openapi.yaml', (_req, res) =>
   res.sendFile(path.join(__dirname, '..', 'openapi.yaml'))
 );
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/version', (_req, res) => {
+  const version = fs.readFileSync(path.join(__dirname, '..', 'version'), 'utf8').trim();
+  res.json({ success: true, data: { version } });
+});
+
+app.get('/health-check', async (_req, res) => {
+  let database = 'ok';
+  try {
+    const conn = await pool.getConnection();
+    conn.release();
+  } catch (err) {
+    database = 'fail';
+  }
+
+  const now = new Date();
+  const time = now.toISOString().slice(0, 19).replace('T', ' ');
+
+  res.json({
+    success: true,
+    data: {
+      health: 'ok',
+      database,
+      time,
+    },
+  });
+});
 
 const PORT = process.env.PORT || 3000;
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
+pool.getConnection()
+  .then((conn) => {
+    conn.release();
+    console.log('Connected to MariaDB');
     app.listen(PORT, () => console.log(`Logger API running on port ${PORT}`));
   })
   .catch((err) => {
-    console.error('MongoDB connection error:', err);
+    console.error('MariaDB connection error:', err);
     process.exit(1);
   });

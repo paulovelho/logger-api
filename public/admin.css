@@ -1,19 +1,128 @@
 * { box-sizing: border-box; }
+
 body {
   font-family: ui-monospace, 'Cascadia Code', Menlo, monospace;
   background: #14161a;
   color: #d4d7dd;
   margin: 0;
-  padding: 1.5rem;
+  padding: 0;
 }
-h1 { font-size: 1.2rem; margin: 0 0 1rem; }
+
+/* ── Login overlay ─────────────────────────────────────────────────────────── */
+
+#login-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.login-box {
+  background: #1e2127;
+  border: 1px solid #353a44;
+  border-radius: 8px;
+  padding: 2rem;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.login-box h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+  color: #d4d7dd;
+}
+
+.login-sub {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #8b919c;
+}
+
+.login-box label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  color: #8b919c;
+  gap: 0.25rem;
+}
+
+.login-box input {
+  width: 100%;
+}
+
+#login-error {
+  font-size: 0.75rem;
+  color: #f7768e;
+  min-height: 1rem;
+}
+
+.login-box button[type="submit"] {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+/* ── App shell ─────────────────────────────────────────────────────────────── */
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 1.5rem;
+  gap: 1rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+h1 { font-size: 1.1rem; margin: 0; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  color: #8b919c;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #2a2e36;
+}
+
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #8b919c;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.5rem 1rem;
+  margin-bottom: -1px;
+}
+
+.tab:hover { color: #d4d7dd; }
+.tab.active { color: #7aa2f7; border-bottom-color: #7aa2f7; }
+
+/* ── Filters ───────────────────────────────────────────────────────────────── */
+
 .filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: end;
-  margin-bottom: 1rem;
 }
+
 .filters label {
   display: flex;
   flex-direction: column;
@@ -21,6 +130,41 @@ h1 { font-size: 1.2rem; margin: 0 0 1rem; }
   gap: 0.25rem;
   color: #8b919c;
 }
+
+.filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.presets {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.preset {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem;
+}
+
+.autorefresh-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #8b919c;
+  cursor: pointer;
+  flex-direction: row !important;
+}
+
+.autorefresh-label input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+/* ── Shared controls ───────────────────────────────────────────────────────── */
+
 input, select, button {
   font: inherit;
   background: #1e2127;
@@ -29,28 +173,101 @@ input, select, button {
   border-radius: 4px;
   padding: 0.4rem 0.6rem;
 }
+
 button { cursor: pointer; }
 button:hover { background: #2a2e36; }
-.summary { font-size: 0.8rem; color: #8b919c; margin-bottom: 0.75rem; }
+button:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Summary ───────────────────────────────────────────────────────────────── */
+
+.summary {
+  font-size: 0.8rem;
+  color: #8b919c;
+}
+
+/* ── Log / Error table ─────────────────────────────────────────────────────── */
+
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+
 th, td {
   text-align: left;
   padding: 0.45rem 0.6rem;
   border-bottom: 1px solid #2a2e36;
   vertical-align: top;
 }
-th { color: #8b919c; font-weight: normal; position: sticky; top: 0; background: #14161a; }
+
+th { color: #8b919c; font-weight: normal; position: sticky; top: 0; background: #14161a; z-index: 1; }
+
 td.ts { white-space: nowrap; color: #8b919c; }
 td.uid { white-space: nowrap; color: #7aa2f7; }
-pre {
+
+/* Prism overrides — fit our dark theme */
+pre[class*="language-"],
+code[class*="language-"] {
+  background: transparent !important;
+  font-family: inherit;
+  font-size: inherit;
+  margin: 0;
+  padding: 0;
+  text-shadow: none;
+}
+
+td pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 8rem;
-  overflow-y: auto;
+  max-height: 6rem;
+  overflow-y: hidden;
+  transition: max-height 0.2s ease;
 }
-tr.expanded pre { max-height: none; }
+
+tr.expanded td pre { max-height: none; }
+
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: #1a1d22; }
-.pager { display: flex; gap: 0.5rem; margin-top: 1rem; align-items: center; }
+
+/* ── Pager ─────────────────────────────────────────────────────────────────── */
+
+.pager { display: flex; gap: 0.5rem; margin-top: 0.75rem; align-items: center; }
+
+/* ── Services grid ─────────────────────────────────────────────────────────── */
+
+#services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.service-card {
+  background: #1e2127;
+  border: 1px solid #353a44;
+  border-radius: 6px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.service-card:hover { border-color: #7aa2f7; }
+
+.service-name {
+  font-size: 0.95rem;
+  color: #7aa2f7;
+  margin-bottom: 0.4rem;
+}
+
+.service-stat {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #d4d7dd;
+  margin-bottom: 0.25rem;
+}
+
+.service-last {
+  font-size: 0.75rem;
+  color: #8b919c;
+}
+
+/* ── Error state ───────────────────────────────────────────────────────────── */
+
 .error { color: #f7768e; }

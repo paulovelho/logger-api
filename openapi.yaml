@@ -5,7 +5,7 @@ info:
     Flexible logging microservice for the **guia.lol** project.
     Services authenticate via JWT and log arbitrary JSON data, each isolated to their own logs.
 
-    Service credentials live in `config.json` (userId + secret pairs). The `userId` is always
+    Service credentials live in `config.json` (service + secret pairs). The `service` is always
     taken from the JWT, never from the request body.
   version: 1.0.0
 servers:
@@ -16,15 +16,17 @@ tags:
     description: Service authentication
   - name: Logs
     description: Log ingestion and querying (per-service, JWT required)
+  - name: Errors
+    description: Error ingestion and querying (per-service, JWT required)
   - name: Admin
-    description: Cross-service access — no authentication (yet)
+    description: Cross-service access — JWT required (same Bearer token as other endpoints)
   - name: System
 paths:
   /login:
     post:
       tags: [Auth]
       summary: Get a JWT token
-      description: Validates a service's `userId` + `secret` against `config.json` and returns a JWT.
+      description: Validates a service's `service` + `secret` against `config.json` and returns a JWT.
       operationId: login
       requestBody:
         required: true
@@ -32,9 +34,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [userId, secret]
+              required: [service, secret]
               properties:
-                userId:
+                service:
                   type: string
                   example: my-service
                 secret:
@@ -62,8 +64,9 @@ paths:
       tags: [Logs]
       summary: Ingest a log entry
       description: |
-        Stores the entire request body as the `data` field of a new log entry.
-        Any JSON structure is accepted; `userId` comes from the JWT.
+        Stores the request body (minus `environment`) as the `data` field of a new log entry.
+        Any JSON structure is accepted; `service` comes from the JWT.
+        `environment` is extracted as a top-level field and defaults to `unknown` if omitted.
       operationId: createLog
       security:
         - bearerAuth: []
@@ -74,7 +77,14 @@ paths:
             schema:
               type: object
               additionalProperties: true
+              properties:
+                environment:
+                  type: string
+                  description: Deployment environment (e.g. production, staging, development)
+                  default: unknown
+                  example: production
               example:
+                environment: production
                 event: user.signup
                 email: user@example.com
                 meta:
@@ -121,11 +131,82 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
-  /health:
+  /error:
+    post:
+      tags: [Errors]
+      summary: Ingest an error entry
+      description: |
+        Stores the request body (minus `environment`) as the `data` field of a new error entry.
+        Any JSON structure is accepted; `service` comes from the JWT.
+        `environment` is extracted as a top-level field and defaults to `unknown` if omitted.
+      operationId: createError
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              properties:
+                environment:
+                  type: string
+                  description: Deployment environment (e.g. production, staging, development)
+                  default: unknown
+                  example: production
+              example:
+                environment: production
+                message: "Failed to fetch page"
+                stack: "Error: ECONNREFUSED\n    at ..."
+                url: "https://example.com/event/123"
+      responses:
+        '201':
+          description: Error entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: 42
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /errors:
+    get:
+      tags: [Errors]
+      summary: Query own error entries
+      description: Returns the authenticated service's errors, newest first, with optional date range and pagination.
+      operationId: getErrors
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/skip'
+      responses:
+        '200':
+          description: Matching errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /health-check:
     get:
       tags: [System]
       summary: Health check
-      operationId: health
+      operationId: healthCheck
       responses:
         '200':
           description: Service is up
@@ -134,19 +215,60 @@ paths:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                    example: ok
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      health:
+                        type: string
+                        example: ok
+                      database:
+                        type: string
+                        example: ok
+                      time:
+                        type: string
+                        example: '2026-07-20 22:59:48'
+  /version:
+    get:
+      tags: [System]
+      summary: Get service version
+      operationId: getVersion
+      responses:
+        '200':
+          description: Current service version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                        example: '1.0.0'
   /admin/logs:
     get:
       tags: [Admin]
       summary: Query logs across all services
-      description: Same as `/report` but unauthenticated and with an optional `userId` filter.
+      description: Same as `/report` but cross-service, with optional `service` filter. JWT required.
       operationId: adminLogs
+      security:
+        - bearerAuth: []
       parameters:
-        - name: userId
+        - name: service
           in: query
-          description: Filter by service
+          description: Filter by service name
+          schema:
+            type: string
+        - name: environment
+          in: query
+          description: Filter by environment
           schema:
             type: string
         - $ref: '#/components/parameters/from'
@@ -160,14 +282,126 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Admin]
+      summary: Purge logs for one service
+      description: Deletes logs for the given `service` older than `olderThanDays` (default 365). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
+      operationId: adminDeleteLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service
+          in: query
+          required: true
+          description: Service to purge logs for
+          schema:
+            type: string
+        - name: olderThanDays
+          in: query
+          description: Delete logs older than this many days
+          schema:
+            type: number
+            default: 365
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    example: 42
+        '400':
+          description: Missing or invalid parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/errors:
+    get:
+      tags: [Admin]
+      summary: Query errors across all services
+      description: Same as `/errors` but cross-service, with optional `service` filter. JWT required.
+      operationId: adminErrors
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service
+          in: query
+          description: Filter by service name
+          schema:
+            type: string
+        - name: environment
+          in: query
+          description: Filter by environment
+          schema:
+            type: string
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/skip'
+      responses:
+        '200':
+          description: Matching errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      tags: [Admin]
+      summary: Purge errors for one service
+      description: Deletes errors for the given `service` older than `olderThanDays` (default 365). Writes an audit entry into `logger_logs` under `service: 'logger'`. JWT required.
+      operationId: adminDeleteErrors
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service
+          in: query
+          required: true
+          description: Service to purge errors for
+          schema:
+            type: string
+        - name: olderThanDays
+          in: query
+          description: Delete errors older than this many days
+          schema:
+            type: number
+            default: 365
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+                    example: 42
+        '400':
+          description: Missing or invalid parameters
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
   /admin/services:
     get:
       tags: [Admin]
       summary: Per-service summary
-      description: Log count and most recent entry timestamp for each service, sorted by last activity.
+      description: Log count and most recent entry timestamp for each service, sorted by last activity. JWT required.
       operationId: adminServices
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Service summaries
@@ -181,7 +415,7 @@ paths:
                     items:
                       type: object
                       properties:
-                        userId:
+                        service:
                           type: string
                           example: my-service
                         count:
@@ -190,6 +424,8 @@ paths:
                         lastLog:
                           type: string
                           format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
 components:
@@ -234,10 +470,17 @@ components:
       properties:
         _id:
           type: string
-          example: 665f1c2e8b3a4d0012a4e9f1
-        userId:
+          example: 42
+        service:
           type: string
           example: my-service
+        serviceName:
+          type: string
+          description: Human-readable service name from config.json
+          example: My Service
+        environment:
+          type: string
+          example: production
         data:
           description: Arbitrary JSON payload as submitted by the service
           example:
@@ -261,6 +504,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LogEntry'
+    ErrorEntry:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 42
+        service:
+          type: string
+          example: my-service
+        serviceName:
+          type: string
+          description: Human-readable service name from config.json
+          example: My Service
+        environment:
+          type: string
+          example: production
+        data:
+          description: Arbitrary JSON payload describing the error
+          example:
+            message: "Failed to fetch page"
+            stack: "Error: ECONNREFUSED\n    at ..."
+        timestamp:
+          type: string
+          format: date-time
+    ErrorList:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total entries matching the filter (ignoring pagination)
+          example: 12
+        count:
+          type: integer
+          description: Entries in this response
+          example: 12
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorEntry'
     Error:
       type: object
       properties:

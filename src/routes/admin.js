@@ -1,56 +1,194 @@
 const express = require('express');
-const Log = require('../models/Log');
+const jwt = require('jsonwebtoken');
+const pool = require('../db');
+const authenticate = require('../middleware/auth');
+const requireReadonly = require('../middleware/require-readonly');
+const config = require('../../config.json');
+const getServiceName = require('../utils/service-name');
 
 const router = express.Router();
 
-// All logs across every service, with optional filters.
-// No auth — admin access is open for now.
-router.get('/logs', async (req, res) => {
+router.get('/logs', authenticate, requireReadonly, async (req, res) => {
   try {
-    const { userId, from, to, limit = 100, skip = 0 } = req.query;
+    const { service, from, to, limit = 100, skip = 0 } = req.query;
 
-    const filter = {};
+    const serviceVal = service || null;
+    const fromVal = from || null;
+    const toVal = to || null;
 
-    if (userId) filter.userId = userId;
+    const [logs] = await pool.execute(
+      `SELECT id, service, environment, data, timestamp
+       FROM logger_logs
+       WHERE (? IS NULL OR service = ?)
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)
+       ORDER BY timestamp DESC
+       LIMIT ? OFFSET ?`,
+      [serviceVal, serviceVal, fromVal, fromVal, toVal, toVal, Number(limit), Number(skip)]
+    );
 
-    if (from || to) {
-      filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to) filter.timestamp.$lte = new Date(to);
-    }
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM logger_logs
+       WHERE (? IS NULL OR service = ?)
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)`,
+      [serviceVal, serviceVal, fromVal, fromVal, toVal, toVal]
+    );
 
-    const logs = await Log.find(filter)
-      .sort({ timestamp: -1 })
-      .skip(Number(skip))
-      .limit(Number(limit))
-      .lean();
+    const mapped = logs.map((row) => ({
+      _id: row.id,
+      service: row.service,
+      serviceName: getServiceName(row.service),
+      environment: row.environment,
+      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
+      timestamp: row.timestamp,
+    }));
 
-    const total = await Log.countDocuments(filter);
-
-    res.json({ total, count: logs.length, logs });
+    res.json({ total, count: mapped.length, logs: mapped });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
 });
 
-// Per-service summary: log count and latest entry for each userId.
-router.get('/services', async (_req, res) => {
+router.get('/errors', authenticate, requireReadonly, async (req, res) => {
   try {
-    const services = await Log.aggregate([
-      {
-        $group: {
-          _id: '$userId',
-          count: { $sum: 1 },
-          lastLog: { $max: '$timestamp' },
-        },
-      },
-      { $sort: { lastLog: -1 } },
-      { $project: { _id: 0, userId: '$_id', count: 1, lastLog: 1 } },
-    ]);
+    const { service, from, to, limit = 100, skip = 0 } = req.query;
 
+    const serviceVal = service || null;
+    const fromVal = from || null;
+    const toVal = to || null;
+
+    const [errors] = await pool.execute(
+      `SELECT id, service, environment, data, timestamp
+       FROM logger_errors
+       WHERE (? IS NULL OR service = ?)
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)
+       ORDER BY timestamp DESC
+       LIMIT ? OFFSET ?`,
+      [serviceVal, serviceVal, fromVal, fromVal, toVal, toVal, Number(limit), Number(skip)]
+    );
+
+    const [[{ total }]] = await pool.execute(
+      `SELECT COUNT(*) AS total
+       FROM logger_errors
+       WHERE (? IS NULL OR service = ?)
+         AND (? IS NULL OR timestamp >= ?)
+         AND (? IS NULL OR timestamp <= ?)`,
+      [serviceVal, serviceVal, fromVal, fromVal, toVal, toVal]
+    );
+
+    const mapped = errors.map((row) => ({
+      _id: row.id,
+      service: row.service,
+      serviceName: getServiceName(row.service),
+      environment: row.environment,
+      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
+      timestamp: row.timestamp,
+    }));
+
+    res.json({ total, count: mapped.length, errors: mapped });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch errors' });
+  }
+});
+
+router.get('/services', authenticate, requireReadonly, async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT service, COUNT(*) AS count, MAX(timestamp) AS lastLog
+       FROM logger_logs
+       GROUP BY service`
+    );
+    const byService = Object.fromEntries(rows.map((r) => [r.service, r]));
+    const configured = config.users
+      .filter((u) => u.active !== false)
+      .map((u) => ({
+        service: u.service,
+        name: u.name || u.service,
+        count: byService[u.service]?.count ?? 0,
+        lastLog: byService[u.service]?.lastLog ?? null,
+      }));
+
+    const services = [
+      ...configured,
+      {
+        service: 'logger',
+        name: 'Logger (self)',
+        count: byService['logger']?.count ?? 0,
+        lastLog: byService['logger']?.lastLog ?? null,
+      },
+    ];
+
+    services.sort((a, b) => (b.lastLog ?? '') < (a.lastLog ?? '') ? -1 : 1);
     res.json({ services });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch services' });
+  }
+});
+
+router.delete('/logs', authenticate, requireReadonly, async (req, res) => {
+  try {
+    const { service, olderThanDays = 365 } = req.query;
+    if (!service) return res.status(400).json({ error: 'service is required' });
+
+    const days = Number(olderThanDays);
+    if (!Number.isFinite(days) || days <= 0) {
+      return res.status(400).json({ error: 'olderThanDays must be a positive number' });
+    }
+
+    const [result] = await pool.execute(
+      `DELETE FROM logger_logs WHERE service = ? AND timestamp < (NOW() - INTERVAL ? DAY)`,
+      [service, days]
+    );
+
+    await pool.execute(
+      `INSERT INTO logger_logs (service, environment, data) VALUES ('logger', 'unknown', ?)`,
+      [JSON.stringify({
+        action: 'purge_logs',
+        targetService: service,
+        cutoffDays: days,
+        deletedCount: result.affectedRows,
+        performedBy: req.service,
+      })]
+    );
+
+    res.json({ deleted: result.affectedRows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to purge logs' });
+  }
+});
+
+router.delete('/errors', authenticate, requireReadonly, async (req, res) => {
+  try {
+    const { service, olderThanDays = 365 } = req.query;
+    if (!service) return res.status(400).json({ error: 'service is required' });
+
+    const days = Number(olderThanDays);
+    if (!Number.isFinite(days) || days <= 0) {
+      return res.status(400).json({ error: 'olderThanDays must be a positive number' });
+    }
+
+    const [result] = await pool.execute(
+      `DELETE FROM logger_errors WHERE service = ? AND timestamp < (NOW() - INTERVAL ? DAY)`,
+      [service, days]
+    );
+
+    await pool.execute(
+      `INSERT INTO logger_logs (service, environment, data) VALUES ('logger', 'unknown', ?)`,
+      [JSON.stringify({
+        action: 'purge_errors',
+        targetService: service,
+        cutoffDays: days,
+        deletedCount: result.affectedRows,
+        performedBy: req.service,
+      })]
+    );
+
+    res.json({ deleted: result.affectedRows });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to purge errors' });
   }
 });
 

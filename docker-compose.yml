@@ -3,18 +3,6 @@ services:
   guia_lol-logger:
     build: .
     container_name: guia_lol-logger
-    ports:
-      - "3002:3002"
+    network_mode: host
     env_file: .env
-    depends_on:
-      - mongo
     restart: unless-stopped
-
-  mongo:
-    image: mongo:7
-    volumes:
-      - mongo_data:/data/db
-    restart: unless-stopped
-
-volumes:
-  mongo_data:
