@@ -1,0 +1,8 @@
+{
+	"name": "guia-lol/logger",
+	"description": "Logger API for guia.lol",
+	"require": {
+		"php": ">=8.2",
+		"platypustechnology/magratheaphp2": "2.3.3"
+	}
+}

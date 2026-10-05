@@ -1,5 +1,67 @@
-logger.guia.lol {
-	reverse_proxy 127.0.0.1:3002
+# Logger: Caddy config. Copy into the server's Caddyfile and replace the placeholders:
+#   <host>          e.g. logger.guia.lol
+#   <path>          the repo checkout, e.g. /var/www/guia.lol/logger
+#   <admin-hash>    output of `caddy hash-password`
+#   php-fpm socket  match the server's PHP version
+# Caddy < 2.8 spells basic_auth as basicauth.
+
+<host> {
+	# Block access to all hidden files and directories (starting with a dot)
+	# (inside `handle`: a bare `respond` sorts after the `handle` blocks below and would never run)
+	@hiddenFiles path_regexp hiddenFiles /\.
+	handle @hiddenFiles {
+		respond 403
+	}
+
+	# PHP sources and the bootstrap are never requested directly
+	@sources path_regexp sources ^/((api|features|shared)/|_inc\.php)
+	handle @sources {
+		respond 403
+	}
+
+	root * <path>/src/app
+
+	basic_auth /admin* {
+		admin <admin-hash>
+	}
+
+	# Static pages
+	rewrite /admin /admin.html
+	rewrite /admin/ /admin.html
+	rewrite /docs /docs.html
+	rewrite /docs/ /docs.html
+	redir /help /docs 302
+	redir /help/ /docs 302
+
+	# Serve existing files (static and PHP) directly
+	@existing file
+	handle @existing {
+		@php path *.php
+		handle @php {
+			php_fastcgi unix//run/php/php8.4-fpm.sock {
+				env HTTP_AUTHORIZATION {http.request.header.Authorization}
+			}
+		}
+		handle {
+			file_server
+		}
+	}
+
+	# Everything else goes to the Magrathea router
+	handle {
+		@rule1 path_regexp r1 ^/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/(.*)$
+		rewrite @rule1 /index.php?magrathea_control={re.r1.1}&magrathea_action={re.r1.2}&magrathea_params={re.r1.3}&{query}
+
+		@rule2 path_regexp r2 ^/([a-zA-Z0-9_-]+)/(.*)$
+		rewrite @rule2 /index.php?magrathea_control={re.r2.1}&magrathea_action={re.r2.2}&{query}
+
+		@rule3 path_regexp r3 ^/(.*)$
+		rewrite @rule3 /index.php?magrathea_control={re.r3.1}&{query}
+
+		php_fastcgi unix//run/php/php8.4-fpm.sock {
+			env HTTP_AUTHORIZATION {http.request.header.Authorization}
+		}
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -7,8 +69,12 @@ logger.guia.lol {
 		X-Frame-Options "DENY"
 		X-XSS-Protection "1; mode=block"
 		Referrer-Policy "no-referrer-when-downgrade"
-		Content-Security-Policy "default-src 'self';"
 	}
+	# /docs is Swagger UI: loaded from unpkg.com with an inline init script
+	@docs path /docs /docs/ /docs.html
+	@notDocs not path /docs /docs/ /docs.html
+	header @notDocs Content-Security-Policy "default-src 'self';"
+	header @docs Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:"
 
 	encode gzip
 }

@@ -1,0 +1,31 @@
+; Copy to magrathea.conf (gitignored) and set use_environment for the machine:
+;   "dev"        local Docker (values come from .env through docker-compose)
+;   "production" a real instance (fill in the placeholders)
+; jwt_key must be at least 32 bytes (firebase/php-jwt rejects shorter HS256 keys).
+; When replacing the Node logger, reuse its JWT_SECRET so already-issued tokens keep working.
+
+[general]
+	use_environment = "production"
+	time_zone = "UTC"
+
+[dev]
+	db_host = "$=DB_HOST"
+	db_name = "$=DB_NAME"
+	db_user = "$=DB_USER"
+	db_pass = "$=DB_PASSWORD"
+	logs_path = "/var/lib/logger/logs"
+	cache_path = "/var/lib/logger/cache"
+	timezone = "UTC"
+	jwt_key = "$=JWT_SECRET"
+	no_cache = true
+
+[production]
+	db_host = "127.0.0.1"
+	db_name = "<database>"
+	db_user = "<db-user>"
+	db_pass = "<db-password>"
+	logs_path = "<path>/logs"
+	cache_path = "<path>/cache"
+	timezone = "UTC"
+	jwt_key = "<at-least-32-bytes>"
+	no_cache = true

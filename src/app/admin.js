@@ -2,9 +2,16 @@ const $ = (id) => document.getElementById(id);
 let skip = 0;
 let total = 0;
 
+// Responses use the Magrathea envelope: {success, data}. On failure data.message explains why.
+async function getData(url) {
+  const res = await fetch(url);
+  const json = await res.json().catch(() => null);
+  if (!json || !json.success) throw new Error(json?.data?.message || 'HTTP ' + res.status);
+  return json.data;
+}
+
 async function loadServices() {
-  const res = await fetch('/admin/services');
-  const { services } = await res.json();
+  const { services } = await getData('/admin/services');
   const sel = $('userId');
   for (const s of services) {
     const opt = document.createElement('option');
@@ -23,9 +30,7 @@ async function loadLogs() {
 
   const rows = $('rows');
   try {
-    const res = await fetch('/admin/logs?' + params);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const data = await getData('/admin/logs?' + params);
     total = data.total;
 
     rows.innerHTML = '';
@@ -54,7 +59,10 @@ async function loadLogs() {
     $('next').disabled = skip + limit >= total;
   } catch (err) {
     rows.innerHTML = '';
-    $('summary').innerHTML = `<span class="error">Failed to load logs: ${err.message}</span>`;
+    const span = document.createElement('span');
+    span.className = 'error';
+    span.textContent = `Failed to load logs: ${err.message}`;
+    $('summary').replaceChildren(span);
   }
 }
 
@@ -63,5 +71,5 @@ $('refresh').addEventListener('click', loadLogs);
 $('prev').addEventListener('click', () => { skip = Math.max(0, skip - Number($('limit').value)); loadLogs(); });
 $('next').addEventListener('click', () => { skip += Number($('limit').value); loadLogs(); });
 
-loadServices();
+loadServices().catch((err) => console.error('Failed to load services:', err));
 loadLogs();

@@ -1,3 +1,7 @@
 node_modules/
 .env
 config.json
+src/vendor/
+src/configs/magrathea.conf
+logs/
+cache/

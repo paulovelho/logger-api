@@ -1,64 +1,84 @@
 # Logger API
 
-Part of the **guia.lol** project. A flexible logging microservice where different services authenticate via JWT and log arbitrary JSON data, each isolated to their own logs.
+Part of the **guia.lol** project. A flexible logging microservice where different services authenticate via JWT and log arbitrary JSON data, each isolated to their own logs. Designed to run as several independent instances (own DB, `magrathea.conf`, `config.json`, vhost each) — nothing is hardcoded to guia.lol hosts or paths.
 
 ## Stack
 
-- Node.js + Express + Mongoose
-- MongoDB (via Docker)
-- JWT authentication (jsonwebtoken)
-- No build step, no TypeScript, no test framework yet
+- PHP 8.4 + MagratheaPHP2 2.3.3 (same layout as `api/`; read the `magrathea-php2` skill before writing PHP)
+- MariaDB — one table, `logs` (`database/logs.sql`)
+- JWT (firebase/php-jwt, HS256)
+- Apache (`src/app/.htaccess`) or Caddy (`site.caddy.example`) in prod; Docker only for local testing
+- No tests yet
 
 ## Project Structure
 
 ```
+config.json                    Service credentials (userId + secret [+ readonly]); outside the docroot
+database/logs.sql              CREATE TABLE logs — run per instance DB
+site.caddy.example             Prod Caddy config (placeholders)
 src/
-  index.js            # Entry point — Express app + Mongoose connection
-  middleware/auth.js   # JWT Bearer token verification, sets req.userId
-  models/Log.js       # Mongoose schema: { userId, data (Mixed), timestamp }
-  routes/auth.js       # POST /login — validates against config.json, returns JWT
-  routes/log.js        # POST /log — stores arbitrary JSON with userId from token
-  routes/report.js     # GET /report — returns logs filtered by userId, with date range + pagination
-  routes/admin.js      # GET /admin/logs + /admin/services — all data, no auth (yet)
-public/admin.html      # Admin dashboard UI, served at GET /admin
-config.json            # Service user credentials (userId + secret pairs)
-.env                   # JWT_SECRET, MONGO_URI, PORT
-docker-compose.yml     # Two services: api + mongo:7
+  composer.json
+  configs/magrathea.conf       Gitignored; copy from .example. [dev] reads .env, [production] is filled in per instance
+  app/                         ← DOCROOT
+    .htaccess                  Prod Apache config: routing, static pages, basic auth on /admin*, headers
+    _inc.php, index.php        Bootstrap + entry point (namespace `logger`)
+    api/LoggerApi.php          Routes (extends MagratheaApi)
+    api/Authentication/LoggerAuth.php   Login, IsService (base auth), raw-secret jwtEncode/jwtDecode
+    api/Controls/LogApi.php    POST /log, POST /error, GET /report
+    api/Controls/AdminApi.php  GET /admin/logs, GET /admin/services
+    features/Log/              Log model (Base/ is generator-style) + LogControl (validated read queries)
+    shared/ServiceUsers.php    Reads ../../config.json
+    admin.html|js|css          Static dashboard; docs.html + openapi.yaml for /docs
+docker/                        Local-only Dockerfile + Apache vhost
+docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
+src-node/                      Archived Node/Mongo version — reference only, not deployed
 ```
 
 ## Key Design Decisions
 
-- **Users live in `config.json`**, not the database — services are static, no CRUD needed.
-- **`data` field is `Mixed`** — each service logs whatever JSON structure it wants.
-- **`userId` comes from the JWT only**, never from the request body — prevents spoofing.
-- **Indexes** on `userId` and `timestamp` (the two filter fields in `/report`).
-- **JWTs never expire** — service-to-service tokens are long-lived by design.
-- No rate limiting or body validation on `/log` (kept simple).
+- **Users live in `config.json`**, not the database — read on every request; no restart needed.
+  Entries may use `userId` or the legacy `service` key. `"readonly": true` → 403 on writes.
+- **Removing a service from `config.json` revokes its tokens** — `IsService` checks it still exists.
+- **`data` is a JSON column** — each service logs whatever structure it wants.
+- **`userId` comes from the JWT only**, never from the request body.
+- **JWTs never expire** and are `{userId, iat}` HS256, signed with the **raw** `jwt_key` (the vendor
+  `jwtEncode`/`jwtDecode` mangle `-`/`_` in the secret; overridden so Node-issued tokens still verify).
+  `jwt_key` must be ≥ 32 bytes (php-jwt v7).
+- **Responses use the Magrathea envelope** `{success, data}`; errors carry the real HTTP status
+  (`LoggerApi::ReturnError` fixes the vendor's 200-on-404). `/log` returns 200, not 201.
+- **Ids are UUIDv7** (`uuid` field type), inserted with `InsertWithPk()` — plain `Insert()` would overwrite the id.
+- **Timestamps are UTC `DATETIME(3)`**, returned as ISO-8601 `…Z`.
+- **Read queries validate every input** (userId regex, dates via `DateTimeImmutable`, limit 1–1000, skip ≥ 0) before building SQL.
+- **Admin is open at the PHP level**; the web server puts basic auth on `/admin*`.
+- Magrathea lower-cases column names in results — use snake_case SQL aliases.
+- If `logs_path` isn't writable, every API error becomes an HTML error page (Magrathea logs exceptions there).
 
-## Running
+## Running (local)
 
 ```bash
-docker compose up -d          # Start API + MongoDB
-docker compose restart api    # After config changes
-npm run dev                   # Local dev with --watch (needs local MongoDB)
+./reboot.sh                   # docker compose down/up --build, waits for /health
+./run.sh                      # up --build + follow logs
+./erase.sh [section]          # TRUNCATE logs, creds from magrathea.conf
+(cd src && composer install)  # vendor/ is gitignored
 ```
 
 ## API Endpoints
 
-| Method | Path      | Auth     | Purpose                          |
-|--------|-----------|----------|----------------------------------|
-| POST   | /login    | No       | Get JWT token (userId + secret)  |
-| POST   | /log      | Bearer   | Ingest any JSON payload          |
-| GET    | /report   | Bearer   | Query logs (from, to, limit, skip) |
-| GET    | /health   | No       | Health check                     |
-| GET    | /admin    | No       | Admin dashboard (browse all logs) |
-| GET    | /admin/logs | No     | All logs, any service (userId, from, to, limit, skip) |
-| GET    | /admin/services | No | Per-service log counts + last activity |
-| GET    | /docs     | No       | Swagger UI (renders openapi.yaml)  |
-| GET    | /help     | No       | Redirects to /docs               |
+| Method | Path            | Auth          | Purpose |
+|--------|-----------------|---------------|---------|
+| POST   | /login          | No            | Get JWT token (userId + secret) |
+| POST   | /log            | Bearer        | Ingest any JSON payload |
+| POST   | /error          | Bearer        | Same, with `level: "error"` unless set |
+| GET    | /report         | Bearer        | Own logs (from, to, limit, skip) |
+| GET    | /health         | No            | `{status, database}` |
+| GET    | /admin          | Basic (web server) | Admin dashboard |
+| GET    | /admin/logs     | Basic (web server) | All logs (userId, from, to, limit, skip) |
+| GET    | /admin/services | Basic (web server) | Per-service counts + last activity |
+| GET    | /docs           | No            | Swagger UI (renders openapi.yaml) |
+| GET    | /help           | No            | Redirects to /docs |
 
 ## Notes
 
-- `blueprint.md` contains the full original specification and build history.
-- No tests exist yet.
-- No `node_modules` or lockfile in the repo — run `npm install` before local dev.
+- `deploy.md` is the per-instance deploy guide (guia.lol prod is the worked example).
+- `blueprint.md` contains the original (Node) specification and build history.
+- Known clients: crawler (`POST /log`), api's `LoggerService` (`POST /log`, `POST /error`).

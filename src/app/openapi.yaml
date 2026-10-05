@@ -1,0 +1,386 @@
+openapi: 3.0.3
+info:
+  title: Logger API
+  description: |
+    Flexible logging microservice. Services authenticate via JWT and log arbitrary JSON data,
+    each isolated to their own logs.
+
+    Service credentials live in `config.json` (userId + secret pairs). The `userId` is always
+    taken from the JWT, never from the request body. Removing a service from `config.json`
+    revokes its tokens; a service marked `"readonly": true` can read `/report` but not write.
+
+    Every response uses the envelope `{ "success": bool, "data": ... }`. On failure, `data`
+    carries `code` and `message`, and the HTTP status matches `code` (400, 401, 403, 404, 500).
+  version: 2.0.0
+servers:
+  - url: /
+    description: This instance
+tags:
+  - name: Auth
+    description: Service authentication
+  - name: Logs
+    description: Log ingestion and querying (per-service, JWT required)
+  - name: Admin
+    description: Cross-service access, protected by web-server basic auth
+  - name: System
+paths:
+  /login:
+    post:
+      tags: [Auth]
+      summary: Get a JWT token
+      description: |
+        Validates a service's `userId` + `secret` against `config.json` and returns a JWT.
+        Tokens are HS256 `{userId, iat}` and do not expire.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, secret]
+              properties:
+                userId:
+                  type: string
+                  example: my-service
+                secret:
+                  type: string
+                  example: s3cr3t
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                            example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /log:
+    post:
+      tags: [Logs]
+      summary: Ingest a log entry
+      description: |
+        Stores the entire request body as the `data` field of a new log entry.
+        Any non-empty JSON object is accepted; `userId` comes from the JWT.
+      operationId: createLog
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/LogPayload'
+      responses:
+        '200':
+          $ref: '#/components/responses/Created'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /error:
+    post:
+      tags: [Logs]
+      summary: Ingest an error entry
+      description: |
+        Same as `/log`, but stores `level: "error"` in `data` when the body has no `level` of its own.
+      operationId: createError
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/LogPayload'
+      responses:
+        '200':
+          $ref: '#/components/responses/Created'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /report:
+    get:
+      tags: [Logs]
+      summary: Query own logs
+      description: Returns the authenticated service's logs, newest first, with optional date range and pagination.
+      operationId: getReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/skip'
+      responses:
+        '200':
+          $ref: '#/components/responses/LogList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      operationId: health
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            example: ok
+                          database:
+                            type: string
+                            enum: [ok, fail]
+                            example: ok
+  /admin/logs:
+    get:
+      tags: [Admin]
+      summary: Query logs across all services
+      description: |
+        Same as `/report` but across every service, with an optional `userId` filter.
+        No token needed; the web server protects `/admin*` with basic auth.
+      operationId: adminLogs
+      parameters:
+        - name: userId
+          in: query
+          description: Filter by service
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_.-]{1,64}$'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/skip'
+      responses:
+        '200':
+          $ref: '#/components/responses/LogList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/services:
+    get:
+      tags: [Admin]
+      summary: Per-service summary
+      description: Log count and most recent entry timestamp for each service, sorted by last activity.
+      operationId: adminServices
+      responses:
+        '200':
+          description: Service summaries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          services:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                userId:
+                                  type: string
+                                  example: my-service
+                                count:
+                                  type: integer
+                                  example: 42
+                                lastLog:
+                                  type: string
+                                  format: date-time
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Obtain a token via `POST /login`.
+  parameters:
+    from:
+      name: from
+      in: query
+      description: Only logs at or after this date/time (ISO-8601; UTC unless an offset is given)
+      schema:
+        type: string
+        format: date-time
+    to:
+      name: to
+      in: query
+      description: Only logs at or before this date/time (ISO-8601; UTC unless an offset is given)
+      schema:
+        type: string
+        format: date-time
+    limit:
+      name: limit
+      in: query
+      description: Max entries to return (clamped to 1–1000)
+      schema:
+        type: integer
+        default: 100
+        minimum: 1
+        maximum: 1000
+    skip:
+      name: skip
+      in: query
+      description: Entries to skip (pagination offset)
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+  requestBodies:
+    LogPayload:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+            example:
+              event: user.signup
+              email: user@example.com
+              meta:
+                source: web
+  schemas:
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data: {}
+    Failure:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        data:
+          type: object
+          properties:
+            type:
+              type: string
+              example: exception
+            code:
+              type: integer
+              example: 401
+            message:
+              type: string
+              example: Invalid credentials
+    LogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7
+          example: 0199b2f4-6c1e-7a3b-9d2e-4f5a6b7c8d9e
+        userId:
+          type: string
+          example: my-service
+        data:
+          description: Arbitrary JSON payload as submitted by the service
+          example:
+            event: user.signup
+            email: user@example.com
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-10-05T12:00:00.123Z'
+  responses:
+    Created:
+      description: Log entry stored
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        example: 0199b2f4-6c1e-7a3b-9d2e-4f5a6b7c8d9e
+                      timestamp:
+                        type: string
+                        format: date-time
+                        example: '2026-10-05T12:00:00.123Z'
+    LogList:
+      description: Matching logs, newest first
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Success'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: Total entries matching the filter (ignoring pagination)
+                        example: 250
+                      count:
+                        type: integer
+                        description: Entries in this response
+                        example: 100
+                      logs:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LogEntry'
+    BadRequest:
+      description: Empty body, or an invalid query parameter
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Failure'
+    Unauthorized:
+      description: Bad credentials, or a missing/invalid token, or a token for a service no longer in config.json
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Failure'
+    Forbidden:
+      description: The service is read-only
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Failure'
+    ServerError:
+      description: Internal error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Failure'

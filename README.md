@@ -1,104 +1,76 @@
 # Logger API
 
 Flexible logging API with JWT authentication. Each service authenticates and can only see its own logs.
+PHP (MagratheaPHP2) + MariaDB. Several instances can run side by side, each with its own database and config.
 
-## Setup
+Deploying an instance: see [deploy.md](deploy.md).
+
+## Local setup (Docker)
 
 ```bash
-docker compose up -d
+cp .env.example .env                                      # JWT_SECRET must be ≥ 32 bytes
+cp src/configs/magrathea.conf.example src/configs/magrathea.conf
+sed -i 's/use_environment = "production"/use_environment = "dev"/' src/configs/magrathea.conf
+cp config.example.json config.json && ./configure.sh
+(cd src && composer install)
+./reboot.sh                                               # builds, starts, waits for /health
 ```
 
-The API runs on `http://localhost:3000`.
+The API runs on `http://localhost:3002` (`PORT` in `.env`). MariaDB runs in `logger_db` and gets
+the `logs` table from `database/logs.sql` on first start.
 
 ## Configuration
 
-**`.env`** — JWT secret and MongoDB URI.
-
-**`config.json`** — Service credentials (userId + secret pairs). Add new services here.
+- **`src/configs/magrathea.conf`**: database, `jwt_key` (≥ 32 bytes), log/cache paths. The `[dev]` section reads `.env`.
+- **`config.json`**: service credentials (`userId` + `secret`, optional `"readonly": true`). Read on every request.
 
 ## API
 
+Every response is `{"success": bool, "data": ...}`. Full reference at `/docs` (Swagger UI over `src/app/openapi.yaml`).
+
 ### POST /login
 
-Get a JWT token.
-
 ```bash
-curl -X POST http://localhost:3000/login \
+curl -X POST http://localhost:3002/login \
   -H "Content-Type: application/json" \
   -d '{"userId": "service-website", "secret": "ws-2024-key"}'
+# {"success":true,"data":{"token":"eyJhbGciOi..."}}
 ```
 
-Response:
-```json
-{"token": "eyJhbGciOi..."}
-```
+### POST /log, POST /error
 
-### POST /log
-
-Send any JSON payload. The `userId` and `timestamp` are added automatically.
+Send any non-empty JSON object. `userId` and `timestamp` are added automatically.
+`/error` also sets `level: "error"` unless the body has its own `level`.
 
 ```bash
-curl -X POST http://localhost:3000/log \
+curl -X POST http://localhost:3002/log \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
-  -d '{"event": "page_view", "path": "/home", "ip": "1.2.3.4"}'
-```
-
-Response:
-```json
-{"id": "6712...", "timestamp": "2025-01-15T10:30:00.000Z"}
+  -d '{"event": "page_view", "path": "/home"}'
+# {"success":true,"data":{"id":"0199b2f4-…","timestamp":"2026-10-05T12:00:00.123Z"}}
 ```
 
 ### GET /report
 
-Retrieve logs for the authenticated service. Supports filtering and pagination.
+The authenticated service's logs, newest first. Query: `from`, `to` (ISO-8601), `limit` (1–1000, default 100), `skip`.
 
 ```bash
-# All logs (last 100)
-curl http://localhost:3000/report \
-  -H "Authorization: Bearer <token>"
-
-# With date range
-curl "http://localhost:3000/report?from=2025-01-01&to=2025-01-31" \
-  -H "Authorization: Bearer <token>"
-
-# With pagination
-curl "http://localhost:3000/report?limit=50&skip=100" \
-  -H "Authorization: Bearer <token>"
+curl "http://localhost:3002/report?from=2026-01-01&limit=50" -H "Authorization: Bearer <token>"
+# {"success":true,"data":{"total":1,"count":1,"logs":[{"id":"…","userId":"service-website","data":{…},"timestamp":"…Z"}]}}
 ```
 
-Response:
-```json
-{
-  "total": 1,
-  "count": 1,
-  "logs": [
-    {
-      "_id": "6712...",
-      "userId": "service-website",
-      "data": {"event": "page_view", "path": "/home", "ip": "1.2.3.4"},
-      "timestamp": "2025-01-15T10:30:00.000Z"
-    }
-  ]
-}
-```
+### Admin
+
+`/admin` is a dashboard over every service's logs (`/admin/logs`, `/admin/services`). It has no
+auth of its own; the web server protects `/admin*` with basic auth (see deploy.md).
 
 ### GET /health
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3002/health
+# {"success":true,"data":{"status":"ok","database":"ok"}}
 ```
 
 ## Adding a new service
 
-Add an entry to `config.json`:
-
-```json
-{
-  "userId": "service-payments",
-  "secret": "pay-2024-key",
-  "name": "Payment Service"
-}
-```
-
-Restart the API: `docker compose restart api`
+Run `./configure.sh` (or add an entry to `config.json`). No restart needed.
