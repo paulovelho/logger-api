@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local Docker only: rebuild + restart, return once /health answers.
-cd "$(dirname "$0")" || exit 1
+cd "$(dirname "$0")/.." || exit 1
 PORT=$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2)
 PORT=${PORT:-3002}
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG="$(dirname "$0")/config.json"
+# config.json lives at the project root, one level up from this script.
+CONFIG="$(dirname "$0")/../config.json"
 
 # Validate config.json
 if [[ ! -f "$CONFIG" ]]; then
@@ -23,7 +24,7 @@ python3 -c "
 import json
 d = json.load(open('$CONFIG'))
 for u in d.get('users', []):
-    print(f\"  - {u['userId']} ({u.get('name', 'no name')})\")
+    print(f\"  - {u.get('userId') or u.get('service')} ({u.get('name', 'no name')})\")
 "
 echo ""
 
@@ -46,7 +47,7 @@ while true; do
   EXISTS=$(python3 -c "
 import json
 d = json.load(open('$CONFIG'))
-print('yes' if any(u['userId'] == '$NEW_ID' for u in d.get('users', [])) else 'no')
+print('yes' if any((u.get('userId') or u.get('service')) == '$NEW_ID' for u in d.get('users', [])) else 'no')
 ")
   if [[ "$EXISTS" == "yes" ]]; then
     echo "A user with userId '$NEW_ID' already exists. Choose a different one."
@@ -85,5 +86,5 @@ with open(config_path, 'w') as f:
     json.dump(d, f, indent=2)
     f.write('\n')
 
-print(f"Added '{NEW_NAME}' (userId: '$NEW_ID') to config.json")
+print(f"Added '$NEW_NAME' (userId: '$NEW_ID') to config.json")
 PYEOF

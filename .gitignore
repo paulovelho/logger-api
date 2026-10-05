@@ -5,3 +5,4 @@ src/vendor/
 src/configs/magrathea.conf
 logs/
 cache/
+site.caddy

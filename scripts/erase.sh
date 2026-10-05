@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Erases ALL logs (TRUNCATE logs) in this instance's database.
 # Credentials come from src/configs/magrathea.conf: the active section (general/use_environment),
-# or the section given as the first argument:   ./erase.sh [dev|production|...]
+# or the section given as the first argument:   ./scripts/erase.sh [dev|production|...]
 # "$=VAR" values are read from the environment (and from .env, if present).
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 CONF=src/configs/magrathea.conf
 [[ -f "$CONF" ]] || { echo "Error: $CONF not found"; exit 1; }

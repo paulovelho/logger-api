@@ -11,9 +11,9 @@ Deploying an instance: see [deploy.md](deploy.md).
 cp .env.example .env                                      # JWT_SECRET must be ≥ 32 bytes
 cp src/configs/magrathea.conf.example src/configs/magrathea.conf
 sed -i 's/use_environment = "production"/use_environment = "dev"/' src/configs/magrathea.conf
-cp config.example.json config.json && ./configure.sh
+cp config.example.json config.json && ./scripts/configure.sh
 (cd src && composer install)
-./reboot.sh                                               # builds, starts, waits for /health
+./scripts/reboot.sh                                               # builds, starts, waits for /health
 ```
 
 The API runs on `http://localhost:3002` (`PORT` in `.env`). MariaDB runs in `logger_db` and gets
@@ -73,4 +73,4 @@ curl http://localhost:3002/health
 
 ## Adding a new service
 
-Run `./configure.sh` (or add an entry to `config.json`). No restart needed.
+Run `./scripts/configure.sh` (or add an entry to `config.json`). No restart needed.

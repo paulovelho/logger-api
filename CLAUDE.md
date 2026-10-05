@@ -16,6 +16,9 @@ Part of the **guia.lol** project. A flexible logging microservice where differen
 config.json                    Service credentials (userId + secret [+ readonly]); outside the docroot
 database/logs.sql              CREATE TABLE logs — run per instance DB
 site.caddy.example             Prod Caddy config (placeholders)
+cors-origins.json              CORS allowlist (used by src-node; not yet read by the PHP app)
+version, changelog.md          Release version + notes
+scripts/                       reboot/run/erase (local), configure (config.json), deploy + restart (prod update)
 src/
   composer.json
   configs/magrathea.conf       Gitignored; copy from .example. [dev] reads .env, [production] is filled in per instance
@@ -31,7 +34,7 @@ src/
     admin.html|js|css          Static dashboard; docs.html + openapi.yaml for /docs
 docker/                        Local-only Dockerfile + Apache vhost
 docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
-src-node/                      Archived Node/Mongo version — reference only, not deployed
+src-node/                      Archived Node version (last: 1.1.2, MariaDB) — reference only, not deployed
 ```
 
 ## Key Design Decisions
@@ -56,10 +59,10 @@ src-node/                      Archived Node/Mongo version — reference only, n
 ## Running (local)
 
 ```bash
-./reboot.sh                   # docker compose down/up --build, waits for /health
-./run.sh                      # up --build + follow logs
-./erase.sh [section]          # TRUNCATE logs, creds from magrathea.conf
-(cd src && composer install)  # vendor/ is gitignored
+./scripts/reboot.sh            # docker compose down/up --build, waits for /health
+./scripts/run.sh               # up --build + follow logs
+./scripts/erase.sh [section]   # TRUNCATE logs, creds from magrathea.conf
+(cd src && composer install)   # vendor/ is gitignored
 ```
 
 ## API Endpoints
@@ -82,3 +85,6 @@ src-node/                      Archived Node/Mongo version — reference only, n
 - `deploy.md` is the per-instance deploy guide (guia.lol prod is the worked example).
 - `blueprint.md` contains the original (Node) specification and build history.
 - Known clients: crawler (`POST /log`), api's `LoggerService` (`POST /log`, `POST /error`).
+- **The PHP API is not yet at parity with the Node 1.1.x that runs in prod** (archived in `src-node/`):
+  the `admin` app uses its `/admin/logs|errors|services` (Bearer, `readonly` credential), the `DELETE`
+  purge routes and `/health-check`. Port those before switching prod to PHP — see `todo`.

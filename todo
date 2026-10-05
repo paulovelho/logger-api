@@ -1,0 +1,15 @@
+## High Priority
+
+- Port the Node 1.1.x features (merged from origin/master, archived in `src-node/`) to PHP before switching prod to PHP; the `admin` app depends on them:
+	- `/admin/logs`, `/admin/errors`, `/admin/services` behind Bearer auth with a `readonly` admin credential (PHP uses web-server basic auth and treats `readonly` as "no writes" instead), plus `serviceName` in results and the synthetic `Logger (self)` service
+	- `DELETE /admin/logs` and `DELETE /admin/errors` purge (`service` required, `olderThanDays` default 365) with a self-audit entry under the reserved `service: 'logger'`
+	- `GET /health-check` (`{health, database, time}`) and `GET /version` (reads `version`); `admin`'s StatusCheckService calls `/health-check`
+	- CORS allowlist from `cors-origins.json`
+	- `active: false` in `config.json` blocks `POST /log` / `POST /error`
+	- decide: separate errors table + `environment` column (Node) vs single `logs` table with `level` (PHP); either way, plan migrating prod data out of `logger_logs` / `logger_errors`
+	- the Node admin UI in `src-node/public/` vs the PHP one in `src/app/`
+- Update the guia.lol worked example in `deploy.md` (section 10): prod is now Node + MariaDB (`logger_logs` / `logger_errors` in `guia_lol`, `network_mode: host`), not Node + MongoDB
+
+## Medium Priority
+
+## Low Priority

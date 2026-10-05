@@ -53,7 +53,7 @@ mysql -u root -p -e "CREATE USER IF NOT EXISTS '<db-user>'@'localhost' IDENTIFIE
 (The table has to exist before the table-level `GRANT`. Reusing a database user that already has access, like `guia_lol` in prod? Skip the last line.)
 
 The table is always called `logs`. Instances don't share a database, so the name never clashes.
-(`DELETE`/`DROP` on the table are only needed by `./erase.sh`, which runs `TRUNCATE`.)
+(`DELETE`/`DROP` on the table are only needed by `./scripts/erase.sh`, which runs `TRUNCATE`.)
 
 ## 4. Configure `src/configs/magrathea.conf`
 
@@ -90,7 +90,7 @@ sudo chown www-data:www-data <path>/logs <path>/cache
 
 ```bash
 cp config.example.json config.json
-./configure.sh          # validates the JSON and adds services interactively
+./scripts/configure.sh          # validates the JSON and adds services interactively
 ```
 
 `config.json` is read on every request, so changes take effect immediately (no restart).
@@ -192,8 +192,8 @@ shows the `deploy-test` entries. API docs are at `https://<host>/docs`.
 ### Maintenance
 
 ```bash
-./erase.sh                 # ⚠️ TRUNCATE logs — reads credentials from magrathea.conf, asks for confirmation
-./erase.sh production      # same, choosing the magrathea.conf section explicitly
+./scripts/erase.sh                 # ⚠️ TRUNCATE logs — reads credentials from magrathea.conf, asks for confirmation
+./scripts/erase.sh production      # same, choosing the magrathea.conf section explicitly
 mysqldump <database> logs > logs-$(date +%F).sql     # backup
 ```
 
@@ -208,7 +208,7 @@ need a service secret or a never-expiring token. Log from a backend instead. Don
 
 ## 9. Add a new service
 
-1. Run `./configure.sh` (or edit `config.json` by hand, see step 6). No restart needed.
+1. Run `./scripts/configure.sh` (or edit `config.json` by hand, see step 6). No restart needed.
 2. Get its token:
    ```bash
    curl -s -X POST https://<host>/login -H "Content-Type: application/json" \
@@ -242,7 +242,7 @@ to `127.0.0.1:3002`. Old Mongo logs are **not** migrated; the new table starts e
    ```
 3. **Set up the instance**: steps 3–6 above, with `<database>` = `guia_lol` (the `logs` table goes
    into the shared guia.lol database), `<path>` = `/var/www/guia.lol/logger`, and `jwt_key` from
-   step 1. `config.json` is already there; check it with `./configure.sh`.
+   step 1. `config.json` is already there; check it with `./scripts/configure.sh`.
 4. **Switch the vhost** from the reverse proxy to PHP: replace the `logger.guia.lol` block in the
    Caddyfile with `site.caddy.example` (step 7b), or point the Apache vhost's DocumentRoot at
    `src/app` (step 7a). Reload, then run the tests in step 8.
