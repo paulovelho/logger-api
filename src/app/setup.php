@@ -1,7 +1,8 @@
 <?php
 
 die;
-require "../vendor/autoload.php";
+
+include("_inc.php");
 
 Magrathea2\MagratheaPHP::Instance()
 	->AppPath(realpath(dirname(__FILE__)))

@@ -49,9 +49,9 @@ SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 	<ElseIf "%{REQUEST_URI} =~ m#^/admin#">
 		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com; frame-src 'self'"
 	</ElseIf>
-	# /magrathea.php (vendor Magrathea admin): Bootstrap from jsdelivr, jQuery, inline scripts/styles/handlers,
-	# data: images; its OpenAPI page loads Swagger UI from unpkg.com
-	<ElseIf "%{REQUEST_URI} =~ m#^/magrathea\.php#">
+	# /magrathea.php (vendor Magrathea admin) and /setup.php (vendor bootstrap): Bootstrap from jsdelivr, jQuery,
+	# inline scripts/styles/handlers, data: images; the admin's OpenAPI page loads Swagger UI from unpkg.com
+	<ElseIf "%{REQUEST_URI} =~ m#^/(magrathea|setup)\.php#">
 		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://code.jquery.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; img-src 'self' data:; connect-src 'self' https://unpkg.com; frame-ancestors 'none'"
 	</ElseIf>
 	<Else>
