@@ -8,7 +8,7 @@ Node 1.1.2 (`src-node/`), and its clients are crawler, api, auth, profiles, admi
 
 **Goal:** PHP behaves like Node 1.1.2 does today. The **one intended change** is the response format: every
 response uses the Magrathea envelope `{success, data}` (errors: `{success: false, data: {message, code}}`, with
-the real HTTP status). The openapi spec, the skill and the changelog document this as the breaking change (v2.0.0).
+the real HTTP status). The openapi spec, the skill and the changelog document this as the breaking change (v1.2.0).
 
 **Decisions already made**
 - **Envelope everywhere.** The writers (crawler, api, auth, profiles) are fire-and-forget and ignore the body.
@@ -138,8 +138,8 @@ No client checks for 201: auth only checks `res.ok`.
   - `/health-check` and `/version`;
   - `config.json` flags (`name`, `readonly`, `active`), read live, no restart;
   - Node and PHP examples that read `.data`.
-- `changelog.md`: add **2.0.0** (PHP + MagratheaPHP2; Magrathea envelope on every response; success status 200;
-  `userId` accepted as an alias). Fix 1.1.2's "default 7" to 365. Set `version` to `2.0.0`.
+- `changelog.md`: add **1.2.0** (PHP + MagratheaPHP2; Magrathea envelope on every response; success status 200;
+  `userId` accepted as an alias). Fix 1.1.2's "default 7" to 365. Set `version` to `1.2.0`.
 - `logger/CLAUDE.md`, `README.md`, `deploy.md`: tables, auth model, no basic auth, the clients list (crawler,
   api, auth, profiles → `/error`, admin, status), and the cutover steps below.
 - Root `CLAUDE.md`: the logger section and diagram (`logger_logs` / `logger_errors`, more callers).
@@ -165,7 +165,7 @@ No client checks for 201: auth only checks `res.ok`.
 
 ## Verification (local Docker)
 1. `reboot.sh`. Then `/health-check` → `{success:true,data:{health:"ok",database:"ok",time}}`, and `/version`
-   → `2.0.0`.
+   → `1.2.0`.
 2. Old tokens:
    - a hand-built HS256 `{service:"service-website", readonly:false, iat}` is accepted;
    - a legacy `{userId}` token is accepted;

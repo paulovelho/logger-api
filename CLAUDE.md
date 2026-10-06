@@ -104,4 +104,4 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
 - `blueprint.md` contains the original (Node) specification and build history.
 - Known clients: crawler, auth, linktree-importer (`POST /log`), api (`POST /log`, `POST /error`),
   profiles (`POST /error`), admin app (`/admin/*`, readonly credential), status (`/health-check`, `/version`).
-- The `admin` app must read `.data` from the envelope (2.0.0); the writers ignore the body.
+- The `admin` app must read `.data` from the envelope (1.2.0); the writers ignore the body.

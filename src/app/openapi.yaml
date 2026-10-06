@@ -15,9 +15,9 @@ info:
     - *active* service (not `"active": false`): `POST /log`, `POST /error`, otherwise 403
     - *admin* credential (`"readonly": true`): every `/admin/*` route, otherwise 403
 
-    **Envelope (since 2.0.0).** Every JSON response is `{success, data}`. Successes are HTTP 200.
+    **Envelope (since 1.2.0).** Every JSON response is `{success, data}`. Successes are HTTP 200.
     Errors carry the real HTTP status, with `data.message` and `data.code`.
-  version: 2.0.0
+  version: 1.2.0
 servers:
   - url: /
     description: This instance
@@ -390,7 +390,7 @@ paths:
                         properties:
                           version:
                             type: string
-                            example: '2.0.0'
+                            example: '1.2.0'
 components:
   securitySchemes:
     bearerAuth:

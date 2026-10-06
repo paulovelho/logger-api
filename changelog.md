@@ -1,4 +1,4 @@
-### 2.0.0
+### 1.2.0
 2026-10
 	- **breaking:** every response uses the Magrathea envelope `{success, data}`; errors are `{success: false, data: {message, code}}` with the real HTTP status. Field names inside `data` are unchanged
 	- **breaking:** successful writes (`POST /log`, `POST /error`) return 200 instead of 201

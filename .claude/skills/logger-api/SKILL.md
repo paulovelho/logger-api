@@ -126,7 +126,7 @@ Writers are usually fire-and-forget: don't let a logger failure break the caller
 | Path | `data` |
 |---|---|
 | `GET /health-check` | `{health: "ok", time: "2026-10-05 22:59:48", database: "ok"\|"fail"}` |
-| `GET /version` | `{version: "2.0.0"}` |
+| `GET /version` | `{version: "1.2.0"}` |
 | `POST /token` `{token}` | `{decoded}` (400 with the JWT error message if invalid) |
 
 ## Examples
