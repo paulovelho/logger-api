@@ -71,7 +71,7 @@
 	@admin path /admin /admin/ /admin.html /admin/*
 	@other not path /docs /docs/ /docs.html /admin /admin/ /admin.html /admin/*
 	header @docs X-Frame-Options "SAMEORIGIN"
-	header @docs Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:; frame-ancestors 'self'"
+	header @docs Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self' https://unpkg.com; img-src 'self' data:; frame-ancestors 'self'"
 	header @admin Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com; frame-src 'self'"
 	header @other Content-Security-Policy "default-src 'self';"
 
