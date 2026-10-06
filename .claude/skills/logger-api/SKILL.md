@@ -3,7 +3,7 @@ name: logger-api
 description: How to authenticate and interact with the guia.lol Logger API. Use when logging events or errors, querying logs, purging old entries, or integrating any service with the logger microservice.
 ---
 
-# Logger API (2.x)
+# Logger API (1.2+)
 
 Logging microservice for guia.lol (PHP + MagratheaPHP2, MariaDB). Each service authenticates with
 its own JWT, writes arbitrary JSON, and can only read back its own entries. An admin credential
