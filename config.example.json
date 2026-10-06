@@ -1,9 +1,15 @@
 {
   "users": [
     {
-      "userId": "service-website",
+      "service": "service-website",
       "secret": "change-me",
       "name": "Website"
+    },
+    {
+      "service": "guia-admin",
+      "secret": "change-me-too",
+      "name": "Admin Panel",
+      "readonly": true
     }
   ]
 }

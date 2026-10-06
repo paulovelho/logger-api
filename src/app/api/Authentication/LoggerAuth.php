@@ -7,8 +7,14 @@ use Magrathea2\Exceptions\MagratheaApiException;
 use Magrathea2\MagratheaApiAuth;
 
 /**
- * Service authentication. Tokens are HS256 `{userId, iat}` with no `exp`, the same format the
- * Node version issued, so tokens already held by crawler and api keep working.
+ * Service authentication. Tokens are HS256 `{service, readonly, iat}` with no `exp`, exactly what
+ * Node 1.1.x issued, so the tokens crawler, api, auth and profiles already hold keep working.
+ * Mongo-era `{userId, iat}` tokens are still accepted.
+ *
+ * Route checks (all re-read config.json, so editing it applies immediately):
+ *   IsService  valid token for a service that still exists (removing it revokes its tokens)
+ *   IsActive   + not `"active": false`   (POST /log, /error)
+ *   IsAdmin    + `"readonly": true`      (/admin/*)
  */
 class LoggerAuth extends MagratheaApiAuth {
 
@@ -16,7 +22,6 @@ class LoggerAuth extends MagratheaApiAuth {
 
 	/** Set by IsService() for the downstream controls. */
 	public ?string $serviceId = null;
-	public bool $readonly = false;
 
 	public function GetSecret(): string {
 		$key = (string)parent::GetSecret();
@@ -33,43 +38,70 @@ class LoggerAuth extends MagratheaApiAuth {
 		return JWT::encode($payload, $this->GetSecret(), $this->jwtEncodeType);
 	}
 
+	private function Verify(string $token): object {
+		return JWT::decode($token, new Key($this->GetSecret(), $this->jwtEncodeType));
+	}
+
 	// Same workaround as api's AuthApi::jwtDecode(): php-jwt's decode failures aren't
 	// MagratheaApiExceptions, so they'd otherwise come back as HTTP 200 with success:false.
 	public function jwtDecode($token) {
-		$secret = $this->GetSecret();
 		try {
-			return JWT::decode($token, new Key($secret, $this->jwtEncodeType));
+			return $this->Verify($token);
 		} catch (\UnexpectedValueException | \DomainException | \InvalidArgumentException $ex) {
 			throw new MagratheaApiException("Invalid token", 401);
 		}
 	}
 
-	// POST /login
+	// POST /login — {service, secret}; `userId` is accepted in place of `service`
 	public function Login() {
 		$post = $this->GetPost();
-		$userId = $post["userId"] ?? null;
+		$service = $post["service"] ?? $post["userId"] ?? null;
 		$secret = $post["secret"] ?? null;
-		if (!is_string($userId) || !is_string($secret) || !ServiceUsers::Validate($userId, $secret)) {
+		if (!is_string($service) || !is_string($secret) || !ServiceUsers::Validate($service, $secret)) {
 			throw new MagratheaApiException("Invalid credentials", 401);
 		}
-		return [ "token" => $this->jwtEncode([ "userId" => $userId, "iat" => time() ]) ];
+		return [ "token" => $this->jwtEncode([
+			"service" => $service,
+			"readonly" => ServiceUsers::IsReadonly($service),
+			"iat" => time(),
+		]) ];
 	}
 
-	/**
-	 * Base authorization: valid Bearer token whose service still exists in config.json.
-	 * Removing a service from config.json revokes its tokens.
-	 */
+	// POST /token — decodes a token signed with this instance's key
+	public function Token() {
+		$token = $this->GetPost()["token"] ?? null;
+		if (!is_string($token) || $token === "") throw new MagratheaApiException("token is required", 400);
+		try {
+			return [ "decoded" => $this->Verify($token) ];
+		} catch (\UnexpectedValueException | \DomainException | \InvalidArgumentException $ex) {
+			throw new MagratheaApiException($ex->getMessage(), 400);
+		}
+	}
+
+	/** Base authorization: see the class comment. */
 	public function IsService($params = []): bool {
 		$token = $this->getTokenByType("Bearer");
 		if (!$token) throw new MagratheaApiException("Missing or invalid Authorization header", 401);
 		$payload = $this->jwtDecode($token);
-		$userId = $payload->userId ?? null;
-		if (!is_string($userId) || !ServiceUsers::Exists($userId)) {
+		$service = $payload->service ?? $payload->userId ?? null;
+		if (!is_string($service) || !ServiceUsers::Exists($service)) {
 			throw new MagratheaApiException("Invalid token", 401);
 		}
 		$this->userInfo = $payload;
-		$this->serviceId = $userId;
-		$this->readonly = ServiceUsers::IsReadonly($userId);
+		$this->serviceId = $service;
+		return true;
+	}
+
+	public function IsActive($params = []): bool {
+		$this->IsService($params);
+		if (!ServiceUsers::IsActive($this->serviceId)) throw new MagratheaApiException("Forbidden", 403);
+		return true;
+	}
+
+	// `readonly` is read from config.json, not the token claim (Node's claim went stale on config edits)
+	public function IsAdmin($params = []): bool {
+		$this->IsService($params);
+		if (!ServiceUsers::IsReadonly($this->serviceId)) throw new MagratheaApiException("Forbidden", 403);
 		return true;
 	}
 }

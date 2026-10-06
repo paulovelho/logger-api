@@ -13,7 +13,7 @@ try {
 			"api/Controls",
 			"shared",
 		)
-		->AddFeature("Log")
+		->AddFeature("Log", "ErrorLog")
 		->Prod()
 		->Load();
 } catch(Exception $ex) {

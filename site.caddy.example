@@ -1,9 +1,8 @@
 # Logger: Caddy config. Copy into the server's Caddyfile and replace the placeholders:
 #   <host>          e.g. logger.guia.lol
 #   <path>          the repo checkout, e.g. /var/www/guia.lol/logger
-#   <admin-hash>    output of `caddy hash-password`
 #   php-fpm socket  match the server's PHP version
-# Caddy < 2.8 spells basic_auth as basicauth.
+# /admin has no basic auth: its API is protected by Bearer tokens (the readonly credential).
 
 <host> {
 	# Block access to all hidden files and directories (starting with a dot)
@@ -20,10 +19,6 @@
 	}
 
 	root * <path>/src/app
-
-	basic_auth /admin* {
-		admin <admin-hash>
-	}
 
 	# Static pages
 	rewrite /admin /admin.html
@@ -70,11 +65,15 @@
 		X-XSS-Protection "1; mode=block"
 		Referrer-Policy "no-referrer-when-downgrade"
 	}
-	# /docs is Swagger UI: loaded from unpkg.com with an inline init script
+	# /docs is Swagger UI: loaded from unpkg.com with an inline init script; the admin embeds it in an iframe
+	# /admin (dashboard + its API): Prism from cdnjs, /docs in an iframe
 	@docs path /docs /docs/ /docs.html
-	@notDocs not path /docs /docs/ /docs.html
-	header @notDocs Content-Security-Policy "default-src 'self';"
-	header @docs Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:"
+	@admin path /admin /admin/ /admin.html /admin/*
+	@other not path /docs /docs/ /docs.html /admin /admin/ /admin.html /admin/*
+	header @docs X-Frame-Options "SAMEORIGIN"
+	header @docs Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:; frame-ancestors 'self'"
+	header @admin Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com; frame-src 'self'"
+	header @other Content-Security-Policy "default-src 'self';"
 
 	encode gzip
 }

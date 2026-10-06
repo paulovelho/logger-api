@@ -9,5 +9,5 @@ use Magrathea2\MagratheaModelControl;
 class LogControlBase extends MagratheaModelControl {
 	protected static $modelNamespace = "logger\Log";
 	protected static $modelName = "Log";
-	protected static $dbTable = "logs";
+	protected static $dbTable = "logger_logs";
 }

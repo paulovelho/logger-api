@@ -1,224 +1,192 @@
 ---
 name: logger-api
-description: How to authenticate and interact with the guia.lol Logger API. Use when logging events, querying logs, or integrating any service with the logger microservice.
+description: How to authenticate and interact with the guia.lol Logger API. Use when logging events or errors, querying logs, purging old entries, or integrating any service with the logger microservice.
 ---
 
-# Logger API
+# Logger API (2.x)
 
-Flexible logging microservice for guia.lol. Each service authenticates with its own JWT and can only see its own logs.
+Logging microservice for guia.lol (PHP + MagratheaPHP2, MariaDB). Each service authenticates with
+its own JWT, writes arbitrary JSON, and can only read back its own entries. An admin credential
+reads (and purges) everything.
 
 ## Base URLs
 
-- **Production**: `https://log.guia.lol`
-- **Local dev**: `http://localhost:3106`
+- **Production**: `https://logger.guia.lol`
+- **Local Docker**: `http://localhost:3002` (`PORT` in `.env`)
+- **Docs**: `/docs` (Swagger UI of `/openapi.yaml`); admin dashboard at `/admin`
 
-## Auth Flow
+## Response envelope
 
-Authentication is a two-step process: get a token once, then use it on every request.
+Every JSON response is the Magrathea envelope. **Read `.data`.**
 
-### Step 1 — Login (POST /login)
+```json
+{"success": true,  "data": { ... }}
+{"success": false, "data": {"message": "Invalid token", "code": 401, ...}}
+```
 
-Credentials live in the server's `config.json`. Each service has a `userId` and `secret`.
+Successes are always HTTP 200 (Node 1.x sent 201 on `/log` and `/error`). Errors carry the real
+status (400 / 401 / 403 / 404 / 500).
+
+## Auth
+
+### 1. Login: `POST /login`
+
+Credentials live in the server's `config.json` (`service` + `secret`). `userId` is accepted in
+place of `service`.
 
 ```bash
-curl -X POST https://log.guia.lol/login \
+curl -X POST https://logger.guia.lol/login \
   -H "Content-Type: application/json" \
-  -d '{"userId": "service-website", "secret": "ws-2024-key"}'
+  -d '{"service": "service-website", "secret": "..."}'
+# {"success":true,"data":{"token":"eyJhbGciOiJIUzI1NiIs..."}}
 ```
 
-Response:
-```json
-{"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."}
-```
+Tokens are HS256 `{service, readonly, iat}` and **never expire**. Log in once, store the token
+(e.g. `LOGGER_TOKEN`), and reuse it. Removing the service from `config.json` revokes it.
 
-Tokens expire in **30 days**. Store and reuse them — don't login on every request.
+### 2. Bearer token on every protected route
 
-### Step 2 — Use the Bearer token
-
-All protected endpoints require:
 ```
 Authorization: Bearer <token>
 ```
 
-The `userId` is extracted from the JWT server-side — never pass it in the body.
+`service` always comes from the token, never from the body.
 
----
+### `config.json` flags
 
-## Endpoints
+Read on every request; edits apply immediately with no restart.
 
-### POST /log — Ingest a log entry
+| Field | Meaning |
+|---|---|
+| `service` | id (legacy entries may use `userId`) |
+| `secret` | login secret |
+| `name` | display name (`serviceName` in results); defaults to the id |
+| `readonly` | `true` marks the **admin credential**: may call `/admin/*`. It can still write. |
+| `active` | `false` blocks `POST /log` and `POST /error` (403) and hides it from `/admin/services` |
 
-Send any JSON payload. `userId` and `timestamp` are added automatically.
+## Writing
+
+### `POST /log` and `POST /error`
+
+Send any JSON object. `environment` (≤ 50 chars, default `unknown`) is stored in its own column;
+the rest becomes `data`. `/log` writes to `logger_logs`, `/error` to `logger_errors`. An empty
+body is stored as `{}`. A JSON array or scalar gets a 400. Requires an *active* service.
 
 ```bash
-curl -X POST https://log.guia.lol/log \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"event": "page_view", "path": "/home", "ip": "1.2.3.4"}'
+curl -X POST https://logger.guia.lol/error \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $LOGGER_TOKEN" \
+  -d '{"environment": "production", "message": "Failed to fetch page", "url": "https://..."}'
+# {"success":true,"data":{"id":42,"timestamp":"2026-10-05T22:59:48.123Z"}}
 ```
 
-Response (201):
+Writers are usually fire-and-forget: don't let a logger failure break the caller.
+
+## Reading
+
+### `GET /report` (own logs) and `GET /errors` (own errors)
+
+| Param | Default | Notes |
+|---|---|---|
+| `from`, `to` | — | any date/time; UTC unless an offset is given; inclusive |
+| `limit` | 100 | clamped to 1–1000 |
+| `skip` | 0 | pagination offset |
+
 ```json
-{"id": "6712abc123def456", "timestamp": "2025-01-15T10:30:00.000Z"}
+{"success": true, "data": {
+  "total": 42, "count": 1,
+  "logs": [{
+    "_id": 42, "service": "service-website", "serviceName": "Website",
+    "environment": "production", "data": {"event": "page_view"},
+    "timestamp": "2026-10-05T22:59:48.000Z"
+  }]
+}}
 ```
 
-The `data` field accepts any JSON structure — there is no schema enforcement.
+`/errors` returns the same shape with an `errors` array. Newest first.
 
----
+## Admin (readonly credential only, otherwise 403)
 
-### GET /report — Query logs
+| Method | Path | `data` |
+|---|---|---|
+| GET | `/admin/logs` | `{total, count, logs}`. Same params as `/report`, plus `service` filter |
+| GET | `/admin/errors` | `{total, count, errors}`. Same as above |
+| GET | `/admin/services` | `{services: [{service, name, count, lastLog}]}` |
+| DELETE | `/admin/logs?service=x&olderThanDays=30` | `{deleted}` |
+| DELETE | `/admin/errors?service=x&olderThanDays=30` | `{deleted}` |
 
-Returns logs for the authenticated service only. Supports date range + pagination.
+- `/admin/services` lists every active configured service, including those with 0 logs, plus the
+  synthetic `{service: "logger", name: "Logger (self)"}`. Counts come from `logger_logs` only.
+  Sorted by `lastLog`, newest first, with `null` last.
+- **Purge**: `service` is required. `olderThanDays` must be a positive whole number (default 365).
+  Each purge writes an audit row into `logger_logs` under `service: "logger"`:
+  `{action: "purge_logs"|"purge_errors", targetService, cutoffDays, deletedCount, performedBy}`.
 
-```bash
-# Last 100 logs (default)
-curl https://log.guia.lol/report \
-  -H "Authorization: Bearer <token>"
+## System (no auth)
 
-# Date range filter
-curl "https://log.guia.lol/report?from=2025-01-01&to=2025-01-31" \
-  -H "Authorization: Bearer <token>"
+| Path | `data` |
+|---|---|
+| `GET /health-check` | `{health: "ok", time: "2026-10-05 22:59:48", database: "ok"\|"fail"}` |
+| `GET /version` | `{version: "2.0.0"}` |
+| `POST /token` `{token}` | `{decoded}` (400 with the JWT error message if invalid) |
 
-# Pagination
-curl "https://log.guia.lol/report?limit=50&skip=100" \
-  -H "Authorization: Bearer <token>"
-```
+## Examples
 
-Query params:
-| Param  | Type   | Default | Description                     |
-|--------|--------|---------|---------------------------------|
-| `from` | date   | —       | Start date (inclusive), ISO 8601 |
-| `to`   | date   | —       | End date (inclusive), ISO 8601   |
-| `limit`| int    | 100     | Max entries to return            |
-| `skip` | int    | 0       | Entries to skip (for pagination) |
-
-Response (200):
-```json
-{
-  "total": 42,
-  "count": 10,
-  "logs": [
-    {
-      "_id": "6712abc123def456",
-      "userId": "service-website",
-      "data": {"event": "page_view", "path": "/home", "ip": "1.2.3.4"},
-      "timestamp": "2025-01-15T10:30:00.000Z"
-    }
-  ]
-}
-```
-
-- `total` — total matching records (for pagination math)
-- `count` — records returned in this response
-
----
-
-### GET /health — Health check
-
-```bash
-curl https://log.guia.lol/health
-```
-
-Response: `{"status": "ok"}`
-
----
-
-## Integration Examples
-
-### Node.js / fetch
+### Node.js (fetch)
 
 ```js
-const BASE_URL = 'https://log.guia.lol';
+const LOGGER_URL = process.env.LOGGER_URL; // https://logger.guia.lol
 
-async function getToken(userId, secret) {
-  const res = await fetch(`${BASE_URL}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, secret }),
-  });
-  const { token } = await res.json();
-  return token;
-}
-
-async function log(token, data) {
-  const res = await fetch(`${BASE_URL}/log`, {
-    method: 'POST',
+async function call(path, { token, method = 'GET', body } = {}) {
+  const res = await fetch(LOGGER_URL + path, {
+    method,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(data),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return res.json(); // { id, timestamp }
+  const json = await res.json();
+  if (!json.success) throw new Error(json.data?.message || `HTTP ${res.status}`);
+  return json.data;
 }
 
-async function report(token, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const res = await fetch(`${BASE_URL}/report${qs ? '?' + qs : ''}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  return res.json(); // { total, count, logs }
-}
+const { token } = await call('/login', { method: 'POST', body: { service: 'service-website', secret } });
+await call('/log', { token, method: 'POST', body: { environment: 'production', event: 'signup' } });
+const { total, logs } = await call('/report?limit=50', { token });
 ```
 
-### PHP / curl
+### PHP (curl)
 
 ```php
-function logger_login(string $userId, string $secret): string {
-    $ch = curl_init('https://log.guia.lol/login');
+function logger_call(string $method, string $path, ?string $token = null, ?array $body = null): array {
+    $ch = curl_init(getenv('LOGGER_URL') . $path);
+    $headers = ['Content-Type: application/json'];
+    if ($token) $headers[] = "Authorization: Bearer $token";
     curl_setopt_array($ch, [
-        CURLOPT_POST => true,
+        CURLOPT_CUSTOMREQUEST => $method,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_POSTFIELDS => json_encode(['userId' => $userId, 'secret' => $secret]),
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_TIMEOUT => 5,
     ]);
-    $body = json_decode(curl_exec($ch), true);
+    if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode((object)$body));
+    $json = json_decode((string)curl_exec($ch), true);
     curl_close($ch);
-    return $body['token'];
+    if (!($json['success'] ?? false)) {
+        throw new RuntimeException($json['data']['message'] ?? 'logger request failed');
+    }
+    return $json['data'];
 }
 
-function logger_log(string $token, array $data): array {
-    $ch = curl_init('https://log.guia.lol/log');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            "Authorization: Bearer $token",
-        ],
-        CURLOPT_POSTFIELDS => json_encode($data),
-    ]);
-    $body = json_decode(curl_exec($ch), true);
-    curl_close($ch);
-    return $body;
-}
+$token = logger_call('POST', '/login', null, ['service' => 'service-api', 'secret' => $secret])['token'];
+logger_call('POST', '/error', $token, ['environment' => 'production', 'message' => $ex->getMessage()]);
 ```
 
----
+## Adding a service
 
-## Adding a New Service
-
-Edit `config.json` on the logger server and restart:
+On the logger server, run `./scripts/configure.sh`, or add an entry to `config.json` by hand:
 
 ```json
-{
-  "userId": "service-payments",
-  "secret": "pay-2024-key",
-  "name": "Payment Service"
-}
+{ "service": "service-payments", "secret": "<random>", "name": "Payment Service" }
 ```
 
-```bash
-docker compose restart api
-```
-
----
-
-## Error Responses
-
-All errors follow: `{"error": "message"}`
-
-| Status | Meaning                        |
-|--------|--------------------------------|
-| 401    | Missing, expired, or invalid JWT |
-| 500    | Server or database error        |
+No restart is needed. Then `POST /login` with it, and store the token in the client's config.

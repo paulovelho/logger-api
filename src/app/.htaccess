@@ -34,29 +34,21 @@ Options -Indexes
 # PHP under mod_php/FPM doesn't get the Authorization header otherwise
 SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 
-# Basic auth on the admin (/admin, /admin.html, /admin/logs, /admin/services).
-# Only applies when the password file exists, so local Docker runs without it.
-# Create it OUTSIDE the DocumentRoot:   sudo htpasswd -c /etc/apache2/.htpasswd-logger admin
-# (Different path per instance? Change it in both lines below.)
-<IfFile "/etc/apache2/.htpasswd-logger">
-	<If "%{REQUEST_URI} =~ m#^/admin#">
-		AuthType Basic
-		AuthName "Logger admin"
-		AuthUserFile /etc/apache2/.htpasswd-logger
-		Require valid-user
-	</If>
-</IfFile>
-
 <IfModule mod_headers.c>
 	Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 	Header always set X-Content-Type-Options "nosniff"
 	Header always set X-Frame-Options "DENY"
 	Header always set X-XSS-Protection "1; mode=block"
 	Header always set Referrer-Policy "no-referrer-when-downgrade"
-	# /docs is Swagger UI: loaded from unpkg.com with an inline init script
+	# /docs is Swagger UI: loaded from unpkg.com with an inline init script; the admin embeds it in an iframe
 	<If "%{REQUEST_URI} =~ m#^/docs#">
-		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:"
+		Header always set X-Frame-Options "SAMEORIGIN"
+		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:; frame-ancestors 'self'"
 	</If>
+	# /admin (dashboard + its API): Prism from cdnjs, /docs in an iframe
+	<ElseIf "%{REQUEST_URI} =~ m#^/admin#">
+		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com; frame-src 'self'"
+	</ElseIf>
 	<Else>
 		Header always set Content-Security-Policy "default-src 'self';"
 	</Else>

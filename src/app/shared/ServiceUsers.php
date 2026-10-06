@@ -8,6 +8,12 @@ use Magrathea2\MagratheaPHP;
 /**
  * Services allowed to log, read from config.json at the module root (outside the docroot).
  * Static by design: services are added with configure.sh, never through the API.
+ * Read on every request, so edits apply without a restart.
+ *
+ * Entry flags (as in Node 1.1.x):
+ *   name      display name (falls back to the id)
+ *   readonly  admin credential: may call /admin/* (it can still write)
+ *   active    false → POST /log and /error get 403, and it's left out of /admin/services
  */
 class ServiceUsers {
 
@@ -25,33 +31,54 @@ class ServiceUsers {
 		return self::$users;
 	}
 
-	// Entries were written as "userId" by configure.sh, but older hand-edited ones use "service".
+	// Node wrote entries as "service"; configure.sh (Mongo era) wrote "userId". Both are accepted.
 	private static function IdOf(array $user): ?string {
-		return $user["userId"] ?? $user["service"] ?? null;
+		$id = $user["service"] ?? $user["userId"] ?? null;
+		return is_string($id) ? $id : null;
 	}
 
-	private static function Find(string $userId): ?array {
+	private static function Find(string $service): ?array {
 		foreach (self::Load() as $user) {
-			if (self::IdOf($user) === $userId) return $user;
+			if (is_array($user) && self::IdOf($user) === $service) return $user;
 		}
 		return null;
 	}
 
-	public static function Exists(string $userId): bool {
-		return self::Find($userId) !== null;
+	public static function Exists(string $service): bool {
+		return self::Find($service) !== null;
 	}
 
-	/** `"readonly": true` services can read their /report but not write. */
-	public static function IsReadonly(string $userId): bool {
-		return (self::Find($userId)["readonly"] ?? false) === true;
+	/** Exists and isn't `"active": false`. */
+	public static function IsActive(string $service): bool {
+		$user = self::Find($service);
+		return $user !== null && ($user["active"] ?? true) !== false;
 	}
 
-	public static function Validate(string $userId, string $secret): bool {
+	/** `"readonly": true` marks the admin credential. */
+	public static function IsReadonly(string $service): bool {
+		return !empty(self::Find($service)["readonly"] ?? false);
+	}
+
+	/** Display name; unknown services (e.g. the `logger` self-audit) get their id back. */
+	public static function Name(string $service): string {
+		$name = self::Find($service)["name"] ?? null;
+		return is_string($name) && $name !== "" ? $name : $service;
+	}
+
+	/** @return array<array{service:string, name:string}> active services, in config order */
+	public static function Active(): array {
+		$active = [];
 		foreach (self::Load() as $user) {
-			if (self::IdOf($user) === $userId && hash_equals((string)($user["secret"] ?? ""), $secret)) {
-				return true;
-			}
+			if (!is_array($user)) continue;
+			$id = self::IdOf($user);
+			if ($id === null || ($user["active"] ?? true) === false) continue;
+			$active[] = [ "service" => $id, "name" => self::Name($id) ];
 		}
-		return false;
+		return $active;
+	}
+
+	public static function Validate(string $service, string $secret): bool {
+		$user = self::Find($service);
+		return $user !== null && hash_equals((string)($user["secret"] ?? ""), $secret);
 	}
 }

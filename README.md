@@ -1,9 +1,10 @@
 # Logger API
 
-Flexible logging API with JWT authentication. Each service authenticates and can only see its own logs.
+Flexible logging API with JWT authentication. Each service authenticates, writes arbitrary JSON
+logs and errors, and can only read back its own. An admin credential reads and purges everything.
 PHP (MagratheaPHP2) + MariaDB. Several instances can run side by side, each with its own database and config.
 
-Deploying an instance: see [deploy.md](deploy.md).
+Deploying an instance: see [deploy.md](deploy.md). Release notes: [changelog.md](changelog.md).
 
 ## Local setup (Docker)
 
@@ -13,63 +14,56 @@ cp src/configs/magrathea.conf.example src/configs/magrathea.conf
 sed -i 's/use_environment = "production"/use_environment = "dev"/' src/configs/magrathea.conf
 cp config.example.json config.json && ./scripts/configure.sh
 (cd src && composer install)
-./scripts/reboot.sh                                               # builds, starts, waits for /health
+./scripts/reboot.sh                                       # builds, starts, waits for /health-check
 ```
 
 The API runs on `http://localhost:3002` (`PORT` in `.env`). MariaDB runs in `logger_db` and gets
-the `logs` table from `database/logs.sql` on first start.
+`logger_logs` / `logger_errors` from `database/schema.sql` on first start.
 
 ## Configuration
 
 - **`src/configs/magrathea.conf`**: database, `jwt_key` (≥ 32 bytes), log/cache paths. The `[dev]` section reads `.env`.
-- **`config.json`**: service credentials (`userId` + `secret`, optional `"readonly": true`). Read on every request.
+- **`config.json`**: service credentials (`service` + `secret`, optional `name`, `"readonly": true`
+  for the admin credential, `"active": false` to block writes). Read on every request.
+- **`cors-origins.json`**: browser origins allowed to call the API (e.g. the admin app).
 
 ## API
 
-Every response is `{"success": bool, "data": ...}`. Full reference at `/docs` (Swagger UI over `src/app/openapi.yaml`).
+Every response is `{"success": bool, "data": ...}`. Errors carry the real HTTP status and
+`data.message`. Full reference at `/docs` (Swagger UI over `src/app/openapi.yaml`).
 
-### POST /login
+| Method | Path | Auth | `data` |
+|---|---|---|---|
+| POST | `/login` | – | `{token}` |
+| POST | `/token` | – | `{decoded}` |
+| POST | `/log`, `/error` | Bearer, active service | `{id, timestamp}` |
+| GET | `/report`, `/errors` | Bearer | `{total, count, logs\|errors}` (own entries) |
+| GET | `/admin/logs`, `/admin/errors` | Bearer, readonly | `{total, count, logs\|errors}` (all, `service` filter) |
+| GET | `/admin/services` | Bearer, readonly | `{services}` |
+| DELETE | `/admin/logs`, `/admin/errors` | Bearer, readonly | `{deleted}` (`service`, `olderThanDays` = 365) |
+| GET | `/health-check`, `/version` | – | `{health, time, database}`, `{version}` |
 
 ```bash
-curl -X POST http://localhost:3002/login \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "service-website", "secret": "ws-2024-key"}'
+curl -X POST http://localhost:3002/login -H "Content-Type: application/json" \
+  -d '{"service": "service-website", "secret": "change-me"}'
 # {"success":true,"data":{"token":"eyJhbGciOi..."}}
-```
 
-### POST /log, POST /error
+curl -X POST http://localhost:3002/log -H "Content-Type: application/json" -H "Authorization: Bearer <token>" \
+  -d '{"environment": "production", "event": "page_view", "path": "/home"}'
+# {"success":true,"data":{"id":1,"timestamp":"2026-10-05T12:00:00.123Z"}}
 
-Send any non-empty JSON object. `userId` and `timestamp` are added automatically.
-`/error` also sets `level: "error"` unless the body has its own `level`.
-
-```bash
-curl -X POST http://localhost:3002/log \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"event": "page_view", "path": "/home"}'
-# {"success":true,"data":{"id":"0199b2f4-…","timestamp":"2026-10-05T12:00:00.123Z"}}
-```
-
-### GET /report
-
-The authenticated service's logs, newest first. Query: `from`, `to` (ISO-8601), `limit` (1–1000, default 100), `skip`.
-
-```bash
 curl "http://localhost:3002/report?from=2026-01-01&limit=50" -H "Authorization: Bearer <token>"
-# {"success":true,"data":{"total":1,"count":1,"logs":[{"id":"…","userId":"service-website","data":{…},"timestamp":"…Z"}]}}
+# {"success":true,"data":{"total":1,"count":1,"logs":[{"_id":1,"service":"service-website","serviceName":"Website",
+#   "environment":"production","data":{"event":"page_view","path":"/home"},"timestamp":"2026-10-05T12:00:00.000Z"}]}}
 ```
 
-### Admin
+`environment` (default `unknown`) is stored in its own column; the rest of the body becomes `data`.
 
-`/admin` is a dashboard over every service's logs (`/admin/logs`, `/admin/services`). It has no
-auth of its own; the web server protects `/admin*` with basic auth (see deploy.md).
+### Admin dashboard
 
-### GET /health
-
-```bash
-curl http://localhost:3002/health
-# {"success":true,"data":{"status":"ok","database":"ok"}}
-```
+`/admin` is a dashboard over every service's logs and errors. Sign in with the readonly
+credential: the token is kept in the browser's localStorage, and every `/admin/*` call sends it as
+a Bearer token.
 
 ## Adding a new service
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Erases ALL logs (TRUNCATE logs) in this instance's database.
+# Erases ALL logs and errors (TRUNCATE logger_logs, logger_errors) in this instance's database.
 # Credentials come from src/configs/magrathea.conf: the active section (general/use_environment),
 # or the section given as the first argument:   ./scripts/erase.sh [dev|production|...]
 # "$=VAR" values are read from the environment (and from .env, if present).
@@ -21,7 +21,7 @@ read -r SECTION DB_H DB_N DB_U DB_P <<<"$CONF_VALUES"
 d() { echo "$1" | base64 -d; }
 SECTION=$(d "$SECTION"); DB_H=$(d "$DB_H"); DB_N=$(d "$DB_N"); DB_U=$(d "$DB_U"); DB_P=$(d "$DB_P")
 
-echo "WARNING: this will permanently erase ALL logs in database '$DB_N' on '$DB_H' (section [$SECTION])."
+echo "WARNING: this will permanently erase ALL logs and errors in database '$DB_N' on '$DB_H' (section [$SECTION])."
 read -r -p 'Type "erase" to confirm: ' confirm
 if [[ "$confirm" != "erase" ]]; then
 	echo "Aborted. Nothing was deleted."
@@ -30,8 +30,8 @@ fi
 
 # Local Docker: the DB has no published port, so go through the container.
 if docker compose ps --services --status running 2>/dev/null | grep -qx logger_db && [[ "$DB_H" == "logger_db" ]]; then
-	docker compose exec -T -e MYSQL_PWD="$DB_P" logger_db mariadb -u"$DB_U" "$DB_N" -e 'TRUNCATE TABLE logs'
+	docker compose exec -T -e MYSQL_PWD="$DB_P" logger_db mariadb -u"$DB_U" "$DB_N" -e 'TRUNCATE TABLE logger_logs; TRUNCATE TABLE logger_errors'
 else
-	MYSQL_PWD="$DB_P" mysql -h"$DB_H" -u"$DB_U" "$DB_N" -e 'TRUNCATE TABLE logs'
+	MYSQL_PWD="$DB_P" mysql -h"$DB_H" -u"$DB_U" "$DB_N" -e 'TRUNCATE TABLE logger_logs; TRUNCATE TABLE logger_errors'
 fi
-echo "Logs erased."
+echo "Logs and errors erased."

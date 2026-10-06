@@ -24,7 +24,7 @@ python3 -c "
 import json
 d = json.load(open('$CONFIG'))
 for u in d.get('users', []):
-    print(f\"  - {u.get('userId') or u.get('service')} ({u.get('name', 'no name')})\")
+    print(f\"  - {u.get('service') or u.get('userId')} ({u.get('name', 'no name')})\")
 "
 echo ""
 
@@ -37,20 +37,20 @@ fi
 
 echo ""
 
-# userId
+# service id
 while true; do
-  read -r -p "userId: " NEW_ID
+  read -r -p "service: " NEW_ID
   if [[ -z "$NEW_ID" ]]; then
-    echo "userId cannot be empty."
+    echo "service cannot be empty."
     continue
   fi
   EXISTS=$(python3 -c "
 import json
 d = json.load(open('$CONFIG'))
-print('yes' if any((u.get('userId') or u.get('service')) == '$NEW_ID' for u in d.get('users', [])) else 'no')
+print('yes' if any((u.get('service') or u.get('userId')) == '$NEW_ID' for u in d.get('users', [])) else 'no')
 ")
   if [[ "$EXISTS" == "yes" ]]; then
-    echo "A user with userId '$NEW_ID' already exists. Choose a different one."
+    echo "A service '$NEW_ID' already exists. Choose a different one."
     continue
   fi
   break
@@ -77,7 +77,7 @@ with open(config_path) as f:
     d = json.load(f)
 
 d.setdefault('users', []).append({
-    'userId': '$NEW_ID',
+    'service': '$NEW_ID',
     'secret': '$NEW_SECRET',
     'name': '$NEW_NAME',
 })
@@ -86,5 +86,6 @@ with open(config_path, 'w') as f:
     json.dump(d, f, indent=2)
     f.write('\n')
 
-print(f"Added '$NEW_NAME' (userId: '$NEW_ID') to config.json")
+print(f"Added '$NEW_NAME' (service: '$NEW_ID') to config.json")
+print("Optional flags (edit config.json by hand): \"readonly\": true = admin credential, \"active\": false = blocked from writing")
 PYEOF
