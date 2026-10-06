@@ -6,3 +6,6 @@ src/configs/magrathea.conf
 logs/
 cache/
 site.caddy
+
+last_deploy.md
+src/composer.phar

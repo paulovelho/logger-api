@@ -69,10 +69,14 @@
 	# /admin (dashboard + its API): Prism from cdnjs, /docs in an iframe
 	@docs path /docs /docs/ /docs.html
 	@admin path /admin /admin/ /admin.html /admin/*
-	@other not path /docs /docs/ /docs.html /admin /admin/ /admin.html /admin/*
+	# /magrathea.php (vendor Magrathea admin): Bootstrap from jsdelivr, jQuery, inline scripts/styles/handlers,
+	# data: images; its OpenAPI page loads Swagger UI from unpkg.com
+	@magrathea path /magrathea.php
+	@other not path /docs /docs/ /docs.html /admin /admin/ /admin.html /admin/* /magrathea.php
 	header @docs X-Frame-Options "SAMEORIGIN"
 	header @docs Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self' https://unpkg.com; img-src 'self' data:; frame-ancestors 'self'"
 	header @admin Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com; frame-src 'self'"
+	header @magrathea Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://code.jquery.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; img-src 'self' data:; connect-src 'self' https://unpkg.com; frame-ancestors 'none'"
 	header @other Content-Security-Policy "default-src 'self';"
 
 	encode gzip
