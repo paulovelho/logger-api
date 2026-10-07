@@ -52,7 +52,7 @@ SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 	# /magrathea.php (vendor Magrathea admin) and /setup.php (vendor bootstrap): Bootstrap from jsdelivr, jQuery,
 	# inline scripts/styles/handlers, data: images; the admin's OpenAPI page loads Swagger UI from unpkg.com
 	<ElseIf "%{REQUEST_URI} =~ m#^/(magrathea|setup)\.php#">
-		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://code.jquery.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; img-src 'self' data:; connect-src 'self' https://unpkg.com; frame-ancestors 'none'"
+		Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://code.jquery.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com; frame-ancestors 'none'"
 	</ElseIf>
 	<Else>
 		Header always set Content-Security-Policy "default-src 'self';"
