@@ -48,8 +48,10 @@ class LoggerApi extends MagratheaApi {
 
 	private function General() {
 		$this->HealthCheck(true);
+		// src/version is the copy scripts/build.sh makes; the module-root file covers instances that never ran it.
 		$this->Add("GET", "version", null, function() {
-			$version = @file_get_contents($this->RootFile("version"));
+			$version = @file_get_contents(MagratheaPHP::Instance()->GetAppRoot()."/../version");
+			if ($version === false) $version = @file_get_contents($this->RootFile("version"));
 			if ($version === false) throw new \Magrathea2\Exceptions\MagratheaApiException("version file not found", 500);
 			return [ "version" => trim($version) ];
 		}, self::PUBLIC, "Release version");

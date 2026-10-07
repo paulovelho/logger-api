@@ -13,4 +13,6 @@ git pull
 echo "Installing PHP dependencies..."
 (cd src && composer install --no-dev --no-interaction)
 
+./scripts/build.sh
+
 echo "✅ logger updated."

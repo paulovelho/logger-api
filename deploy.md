@@ -36,7 +36,10 @@ Placeholders used below:
 git clone <repo-url> <path>
 cd <path>/src
 composer install --no-dev
+cd .. && ./scripts/build.sh   # copies version → src/version (served by /version)
 ```
+
+To update later, run `./scripts/restart.sh` (git pull + composer install + build.sh).
 
 Only `<path>/src/app` is served. `config.json`, `cors-origins.json`, `src/configs/` and
 `src/vendor/` sit outside the document root and can't be reached over HTTP.
@@ -56,7 +59,9 @@ mysql -u root -p -e "CREATE USER IF NOT EXISTS '<db-user>'@'localhost' IDENTIFIE
 
 - The tables have to exist before the table-level `GRANT`. If you reuse a database user that
   already has access, like `guia_lol` in prod, skip the last command.
-- `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so running it again is harmless.
+- ⚠️ `schema.sql` starts with `DROP TABLE IF EXISTS`: running it again **wipes every log and error**.
+  Use it for a fresh instance or a deliberate reset only; to keep the data, use the migrations below.
+  Table-level grants survive the drop (MariaDB keeps them by name), so no need to re-`GRANT`.
 - **Upgrading an existing instance** (tables created before 1.2.2): run each script in
   `database/migrations/` newer than the version it ran, as a user with `ALTER` (e.g. root):
   `mysql -u root -p <database> < database/migrations/1.2.2-occurred-at.sql`. The scripts are
@@ -268,6 +273,7 @@ reads and writes the **same tables**, so nothing is migrated, and the old logs s
    ```bash
    git pull
    cd src && composer install --no-dev && cd ..
+   ./scripts/build.sh
    ```
 4. **Set up the instance**: steps 4–7 above, with `<database>` = `guia_lol` and the same DB user
    Node used. The tables already exist (step 3 is a no-op). `config.json` and `cors-origins.json`

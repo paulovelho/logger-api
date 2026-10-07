@@ -1,8 +1,11 @@
--- Logger storage. IF NOT EXISTS: safe to run against a database that already has them.
+-- Logger storage. ⚠️ DROPs both tables first: running this wipes every log and error.
 -- `timestamp` is when the server received the entry (filled by the logger, UTC); `occurred_at` is when
 -- the event happened (client time, skew-corrected; = `timestamp` when the client sends none).
 -- `data` is whatever JSON the service posted, minus the reserved keys (environment, occurredAt, sentAt).
--- Databases created before 1.2.2: run migrations/1.2.2-occurred-at.sql instead.
+-- Databases created before 1.2.2: run migrations/1.2.2-occurred-at.sql instead to keep the data.
+
+DROP TABLE IF EXISTS logger_logs;
+DROP TABLE IF EXISTS logger_errors;
 
 CREATE TABLE IF NOT EXISTS logger_logs (
   id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

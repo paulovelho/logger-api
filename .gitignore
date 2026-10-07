@@ -9,3 +9,4 @@ site.caddy
 
 last_deploy.md
 src/composer.phar
+src/version

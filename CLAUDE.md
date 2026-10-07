@@ -15,11 +15,11 @@ Part of the **guia.lol** project. A flexible logging microservice where differen
 ```
 config.json                    Service credentials (service + secret [+ name, readonly, active]); outside the docroot
 cors-origins.json              CORS allowlist, read per request (LoggerApi::Cors)
-database/schema.sql            CREATE TABLE IF NOT EXISTS logger_logs, logger_errors — run per instance DB
+database/schema.sql            DROP + CREATE logger_logs, logger_errors — run per instance DB (wipes data!)
 database/migrations/           Upgrade scripts for existing DBs (1.2.2-occurred-at.sql), re-runnable
 site.caddy.example             Prod Caddy config (placeholders)
-version, changelog.md          Release version + notes
-scripts/                       reboot/run/erase/test (local), configure (config.json), deploy + restart (prod update)
+version, changelog.md          Release version + notes (build.sh copies version to src/version, gitignored)
+scripts/                       reboot/run/erase/test (local), configure (config.json), build (src/version), deploy + restart (prod update)
 src/
   composer.json, phpunit.xml
   tests/                       OccurredAtTest (skew rules), WriteTest (single routes + regression), BatchTest
@@ -113,7 +113,7 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
 | DELETE | /admin/logs     | Bearer, readonly | Purge (`service` required, `olderThanDays` default 365) |
 | DELETE | /admin/errors   | Bearer, readonly | Same, on errors |
 | GET    | /health-check   | No            | `{health, time, database}` (vendor `HealthCheck(true)`) |
-| GET    | /version        | No            | `{version}` from `version` |
+| GET    | /version        | No            | `{version}` from `src/version`, else `version` |
 | GET    | /admin          | No (login form) | Admin dashboard |
 | GET    | /docs           | No            | Swagger UI (renders openapi.yaml) |
 | GET    | /help           | No            | Redirects to /docs |
