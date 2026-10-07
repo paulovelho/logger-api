@@ -1,3 +1,8 @@
+### 1.2.1
+2026-10
+	- **fix:** unexpected server errors (e.g. database failures) returned HTTP 200 with `success: false` and the exception's internals (SQL / connection details) in `data`; they now return 500 with a generic `Internal server error` message and are written to the server log
+	- **fix:** `POST /login` and `POST /token` ignored JSON bodies sent as `application/json; charset=utf-8` (401 / 400); the body is now parsed as JSON whatever the `Content-Type`, as in Node 1.x
+
 ### 1.2.0
 2026-10
 	- **breaking:** every response uses the Magrathea envelope `{success, data}`; errors are `{success: false, data: {message, code}}` with the real HTTP status. Field names inside `data` are unchanged

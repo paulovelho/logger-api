@@ -17,7 +17,7 @@ info:
 
     **Envelope (since 1.2.0).** Every JSON response is `{success, data}`. Successes are HTTP 200.
     Errors carry the real HTTP status, with `data.message` and `data.code`.
-  version: 1.2.0
+  version: 1.2.1
 servers:
   - url: /
     description: This instance
@@ -71,6 +71,8 @@ paths:
                             example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /token:
     post:
       tags: [Auth]
@@ -104,6 +106,8 @@ paths:
                             example: { service: my-service, readonly: false, iat: 1760000000 }
         '400':
           $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /log:
     post:
       tags: [Logs]
@@ -159,6 +163,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /error:
     post:
       tags: [Errors]
@@ -210,6 +216,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /admin/logs:
     get:
       tags: [Admin]
@@ -233,6 +241,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
     delete:
       tags: [Admin]
       summary: Purge one service's logs
@@ -255,6 +265,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /admin/errors:
     get:
       tags: [Admin]
@@ -278,6 +290,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
     delete:
       tags: [Admin]
       summary: Purge one service's errors
@@ -299,6 +313,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /admin/services:
     get:
       tags: [Admin]
@@ -344,6 +360,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /health-check:
     get:
       tags: [System]
@@ -390,7 +408,9 @@ paths:
                         properties:
                           version:
                             type: string
-                            example: '1.2.0'
+                            example: '1.2.1'
+        '500':
+          $ref: '#/components/responses/ServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -402,17 +422,19 @@ components:
     from:
       name: from
       in: query
-      description: Only entries at or after this date/time (UTC unless an offset is given)
+      description: |
+        Only entries at or after this date/time. Any format PHP's DateTimeImmutable parses
+        (e.g. `2026-10-01`, `2026-10-01T12:00:00-03:00`); UTC unless an offset is given.
       schema:
         type: string
-        format: date-time
     to:
       name: to
       in: query
-      description: Only entries at or before this date/time (UTC unless an offset is given)
+      description: |
+        Only entries at or before this date/time (same formats as `from`). A bare date means its
+        midnight, so `to=2026-10-01` excludes the rest of that day.
       schema:
         type: string
-        format: date-time
     limit:
       name: limit
       in: query
@@ -472,6 +494,10 @@ components:
             code:
               type: integer
               example: 401
+            type:
+              type: string
+              description: Vendor field (`exception`, or `unknown error` for an unknown route)
+              example: exception
     Payload:
       type: object
       additionalProperties: true
@@ -479,7 +505,9 @@ components:
         environment:
           type: string
           maxLength: 50
-          description: Deployment environment (e.g. production, staging, development)
+          description: |
+            Deployment environment (e.g. production, staging, development). A number is stored as
+            its string; an empty string or any other type is a 400.
           default: unknown
           example: production
     Entry:
@@ -602,7 +630,9 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     ServerError:
-      description: Internal error
+      description: |
+        Internal error. Unexpected failures (e.g. the database) carry a generic
+        `Internal server error` message; the details go to the server log.
       content:
         application/json:
           schema:

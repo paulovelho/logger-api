@@ -68,7 +68,7 @@ Read on every request; edits apply immediately with no restart.
 
 ### `POST /log` and `POST /error`
 
-Send any JSON object. `environment` (≤ 50 chars, default `unknown`) is stored in its own column;
+Send any JSON object. `environment` (string ≤ 50 chars, or a number; default `unknown`) is stored in its own column;
 the rest becomes `data`. `/log` writes to `logger_logs`, `/error` to `logger_errors`. An empty
 body is stored as `{}`. A JSON array or scalar gets a 400. Requires an *active* service.
 
@@ -87,7 +87,7 @@ Writers are usually fire-and-forget: don't let a logger failure break the caller
 
 | Param | Default | Notes |
 |---|---|---|
-| `from`, `to` | — | any date/time; UTC unless an offset is given; inclusive |
+| `from`, `to` | — | any date/time PHP parses; UTC unless an offset is given; inclusive (a bare `to=2026-10-01` means its midnight) |
 | `limit` | 100 | clamped to 1–1000 |
 | `skip` | 0 | pagination offset |
 
@@ -126,7 +126,7 @@ Writers are usually fire-and-forget: don't let a logger failure break the caller
 | Path | `data` |
 |---|---|
 | `GET /health-check` | `{health: "ok", time: "2026-10-05 22:59:48", database: "ok"\|"fail"}` |
-| `GET /version` | `{version: "1.2.0"}` |
+| `GET /version` | `{version: "1.2.1"}` |
 | `POST /token` `{token}` | `{decoded}` (400 with the JWT error message if invalid) |
 
 ## Examples

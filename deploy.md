@@ -175,7 +175,7 @@ URL=https://<host>
 curl $URL/health-check
 # → {"success":true,"data":{"health":"ok","time":"…","database":"ok"}}
 curl $URL/version
-# → {"success":true,"data":{"version":"1.2.0"}}
+# → {"success":true,"data":{"version":"1.2.1"}}
 
 # 2. Log in as a service from config.json
 TOKEN=$(curl -s -X POST $URL/login \

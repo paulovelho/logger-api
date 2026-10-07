@@ -54,7 +54,10 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
   accepted), signed with the **raw** `jwt_key` (the vendor `jwtEncode`/`jwtDecode` mangle `-`/`_` in
   the secret; overridden so Node-issued tokens still verify). `jwt_key` must be ≥ 32 bytes (php-jwt v7).
 - **Responses use the Magrathea envelope** `{success, data}`; errors carry the real HTTP status
-  (`LoggerApi::ReturnError` fixes the vendor's 200-on-404). `/log` and `/error` return 200, not 201.
+  (`LoggerApi::ReturnError`/`ReturnFail` fix the vendor's 200-on-404 and 200-on-DB-failure; non-API
+  exceptions are logged and answered with a generic 500). `/log` and `/error` return 200, not 201.
+- **`/login` and `/token` parse the raw body as JSON** (`LoggerAuth::Input`): the vendor `GetPost()`
+  ignores JSON sent as `application/json; charset=utf-8`.
 - **Writes**: `environment` (default `unknown`) goes to its own column, the rest of the body to `data`
   (decoded as objects so `{}` stays `{}`). Auto-increment ids via plain `Insert()`; `timestamp` is left
   to the DB default (UTC server time), returned as ISO-8601 `…Z`.

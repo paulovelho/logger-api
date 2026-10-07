@@ -52,9 +52,21 @@ class LoggerAuth extends MagratheaApiAuth {
 		}
 	}
 
+	/**
+	 * The request body. The vendor GetPost() only decodes JSON when Content-Type ends in "json",
+	 * so `application/json; charset=utf-8` (fine for Node's express.json) came back empty: try the
+	 * raw body as JSON first, then fall back to GetPost() for form-encoded bodies.
+	 */
+	private function Input(): array {
+		$json = json_decode((string)file_get_contents("php://input"), true);
+		if (is_array($json)) return $json;
+		$post = $this->GetPost();
+		return is_array($post) ? $post : [];
+	}
+
 	// POST /login — {service, secret}; `userId` is accepted in place of `service`
 	public function Login() {
-		$post = $this->GetPost();
+		$post = $this->Input();
 		$service = $post["service"] ?? $post["userId"] ?? null;
 		$secret = $post["secret"] ?? null;
 		if (!is_string($service) || !is_string($secret) || !ServiceUsers::Validate($service, $secret)) {
@@ -69,7 +81,7 @@ class LoggerAuth extends MagratheaApiAuth {
 
 	// POST /token — decodes a token signed with this instance's key
 	public function Token() {
-		$token = $this->GetPost()["token"] ?? null;
+		$token = $this->Input()["token"] ?? null;
 		if (!is_string($token) || $token === "") throw new MagratheaApiException("token is required", 400);
 		try {
 			return [ "decoded" => $this->Verify($token) ];
