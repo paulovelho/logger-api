@@ -1,3 +1,13 @@
+### 1.2.2
+2026-10
+	- **new:** `POST /log/batch` and `POST /error/batch` — 1–100 entries per request (body ≤ 256 KB, otherwise 413), all or nothing: any invalid entry is a 400 naming it (`entries[3]: must be an object`) and nothing is stored; a database failure stores nothing and returns 500. Response `{count}`
+	- **new:** event time — `occurredAt` and `sentAt` are reserved body keys (ISO-8601, UTC without an offset; 400 if invalid) and are no longer stored in `data`. With both, the stored time is `arrival - (sentAt - occurredAt)`, so the client's clock doesn't need to be right; with only `occurredAt` it is kept as sent; never later than the arrival
+	- **new:** every entry read back (`/report`, `/errors`, `/admin/logs`, `/admin/errors`) has an `occurredAt`; `from`, `to` and the newest-first order now use it. `timestamp` is still the arrival time, and `lastLog` and purges still use it. Entries without a client time have `occurredAt` = `timestamp`, so existing clients see the same results
+	- **change:** `timestamp` is stored with milliseconds, and the `timestamp` returned by `POST /log` / `/error` is now exactly the stored value (one database clock reading per request)
+	- **migration:** run `database/migrations/1.2.2-occurred-at.sql` once per instance (adds `occurred_at` to both tables, backfills it from `timestamp`, adds `(service, occurred_at)` indexes; safe to re-run). Needs `ALTER`, so run it as a privileged user
+	- **fix:** a database failure during a write could prefix the JSON response with the vendor's stray `got error!` output
+	- **dev:** PHPUnit suite (`./scripts/test.sh`, runs inside the container)
+
 ### 1.2.1
 2026-10
 	- **fix:** unexpected server errors (e.g. database failures) returned HTTP 200 with `success: false` and the exception's internals (SQL / connection details) in `data`; they now return 500 with a generic `Internal server error` message and are written to the server log

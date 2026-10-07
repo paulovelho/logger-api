@@ -4,5 +4,8 @@
 	"require": {
 		"php": ">=8.2",
 		"platypustechnology/magratheaphp2": "2.3.3"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^12"
 	}
 }

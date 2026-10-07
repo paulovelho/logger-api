@@ -37,6 +37,7 @@ Every response is `{"success": bool, "data": ...}`. Errors carry the real HTTP s
 | POST | `/login` | – | `{token}` |
 | POST | `/token` | – | `{decoded}` |
 | POST | `/log`, `/error` | Bearer, active service | `{id, timestamp}` |
+| POST | `/log/batch`, `/error/batch` | Bearer, active service | `{count}` (1–100 entries, all or nothing) |
 | GET | `/report`, `/errors` | Bearer | `{total, count, logs\|errors}` (own entries) |
 | GET | `/admin/logs`, `/admin/errors` | Bearer, readonly | `{total, count, logs\|errors}` (all, `service` filter) |
 | GET | `/admin/services` | Bearer, readonly | `{services}` |
@@ -54,10 +55,29 @@ curl -X POST http://localhost:3002/log -H "Content-Type: application/json" -H "A
 
 curl "http://localhost:3002/report?from=2026-01-01&limit=50" -H "Authorization: Bearer <token>"
 # {"success":true,"data":{"total":1,"count":1,"logs":[{"_id":1,"service":"service-website","serviceName":"Website",
-#   "environment":"production","data":{"event":"page_view","path":"/home"},"timestamp":"2026-10-05T12:00:00.000Z"}]}}
+#   "environment":"production","data":{"event":"page_view","path":"/home"},
+#   "timestamp":"2026-10-05T12:00:00.123Z","occurredAt":"2026-10-05T12:00:00.123Z"}]}}
+
+curl -X POST http://localhost:3002/log/batch -H "Content-Type: application/json" -H "Authorization: Bearer <token>" \
+  -d '{"environment": "production", "sentAt": "2026-10-07T14:03:11Z", "entries": [
+        {"occurredAt": "2026-10-05T09:12:40Z", "event": "game_start"}, {"event": "game_over"}]}'
+# {"success":true,"data":{"count":2}}
 ```
 
 `environment` (default `unknown`) is stored in its own column; the rest of the body becomes `data`.
+`occurredAt` / `sentAt` (optional, ISO-8601) set when the event happened: with both, the stored
+`occurredAt` is `arrival - (sentAt - occurredAt)`, so a queued event keeps its age even if the
+client's clock is wrong. `timestamp` is always the arrival time. `from` / `to` filter on `occurredAt`.
+
+### Tests
+
+```bash
+(cd src && composer install)       # PHPUnit is a dev dependency
+./scripts/test.sh                  # runs inside logger_php; --filter BatchTest etc. pass through
+```
+
+Unit tests for the clock-skew rules, plus integration tests that call the API on the container's
+`http://localhost` and check the database. Every row they write is tagged and deleted afterwards.
 
 ### Admin dashboard
 

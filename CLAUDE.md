@@ -5,10 +5,10 @@ Part of the **guia.lol** project. A flexible logging microservice where differen
 ## Stack
 
 - PHP 8.4 + MagratheaPHP2 2.3.3 (same layout as `api/`; read the `magrathea-php2` skill before writing PHP)
-- MariaDB — `logger_logs` + `logger_errors` (`database/schema.sql`), the same tables Node 1.1.x used
+- MariaDB — `logger_logs` + `logger_errors` (`database/schema.sql`; upgrades in `database/migrations/`), Node 1.1.x's tables + `occurred_at` (1.2.2)
 - JWT (firebase/php-jwt, HS256)
 - Apache (`src/app/.htaccess`) or Caddy (`site.caddy.example`) in prod; Docker only for local testing
-- No tests yet
+- PHPUnit 12 (dev dependency): `./scripts/test.sh` runs `src/tests/` inside the container (needs its DB)
 
 ## Project Structure
 
@@ -16,20 +16,22 @@ Part of the **guia.lol** project. A flexible logging microservice where differen
 config.json                    Service credentials (service + secret [+ name, readonly, active]); outside the docroot
 cors-origins.json              CORS allowlist, read per request (LoggerApi::Cors)
 database/schema.sql            CREATE TABLE IF NOT EXISTS logger_logs, logger_errors — run per instance DB
+database/migrations/           Upgrade scripts for existing DBs (1.2.2-occurred-at.sql), re-runnable
 site.caddy.example             Prod Caddy config (placeholders)
 version, changelog.md          Release version + notes
-scripts/                       reboot/run/erase (local), configure (config.json), deploy + restart (prod update)
+scripts/                       reboot/run/erase/test (local), configure (config.json), deploy + restart (prod update)
 src/
-  composer.json
+  composer.json, phpunit.xml
+  tests/                       OccurredAtTest (skew rules), WriteTest (single routes + regression), BatchTest
   configs/magrathea.conf       Gitignored; copy from .example. [dev] reads .env, [production] is filled in per instance
   app/                         ← DOCROOT
     .htaccess                  Prod Apache config: routing, static pages, security headers / CSP
     _inc.php, index.php        Bootstrap + entry point (namespace `logger`)
     api/LoggerApi.php          Routes (extends MagratheaApi), CORS, /health-check, /version
     api/Authentication/LoggerAuth.php   Login, Token, IsService / IsActive / IsAdmin, raw-secret jwtEncode/jwtDecode
-    api/Controls/LogApi.php    POST /log, POST /error, GET /report, GET /errors
+    api/Controls/LogApi.php    POST /log, POST /error, POST /log|error/batch, GET /report, GET /errors
     api/Controls/AdminApi.php  GET /admin/logs|errors|services, DELETE /admin/logs|errors (purge)
-    features/Log/              Log model (logger_logs; Base/ is generator-style) + LogControl (writes, validated reads, purge — both tables)
+    features/Log/              Log model (logger_logs; Base/ is generator-style) + LogControl (writes, batch, skew, validated reads, purge — both tables)
     features/ErrorLog/         ErrorLog model (logger_errors)
     shared/ServiceUsers.php    Reads ../../config.json
     admin.html|js|css          Dashboard (Node's UI, reads the envelope); docs.html + openapi.yaml for /docs
@@ -43,6 +45,7 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
 - **Contract = Node 1.1.2's, wrapped in the envelope.** Same routes, field names (`_id`, `service`,
   `serviceName`, `environment`, `data`, `timestamp`; `total/count/logs|errors`) and tables. The only
   intended difference is the response format (see below) — keep it that way; clients depend on it.
+  1.2.2 only *adds* to it (batch routes, `occurredAt`); a client that sends neither new key sees 1.2's behaviour.
 - **Users live in `config.json`**, not the database — read on every request; no restart needed.
   Entries use `service` (or the legacy `userId` key). Flags: `name`, `readonly` (= admin credential,
   may call `/admin/*`; it can still write), `active: false` (403 on writes, hidden from `/admin/services`).
@@ -58,11 +61,23 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
   exceptions are logged and answered with a generic 500). `/log` and `/error` return 200, not 201.
 - **`/login` and `/token` parse the raw body as JSON** (`LoggerAuth::Input`): the vendor `GetPost()`
   ignores JSON sent as `application/json; charset=utf-8`.
-- **Writes**: `environment` (default `unknown`) goes to its own column, the rest of the body to `data`
-  (decoded as objects so `{}` stays `{}`). Auto-increment ids via plain `Insert()`; `timestamp` is left
-  to the DB default (UTC server time), returned as ISO-8601 `…Z`.
+- **Writes**: the reserved keys `environment` (default `unknown`), `occurredAt`, `sentAt` are pulled
+  out; the rest of the body goes to `data` (decoded as objects so `{}` stays `{}`). Every write goes
+  through `LogControl::InsertRows()`: one multi-row prepared INSERT (atomic in InnoDB; the vendor
+  opens a new connection per query, so a real transaction isn't possible). `timestamp` (arrival) is
+  one `NOW(3)` reading per request — the DB clock, same as before and as purge — and is returned as
+  ISO-8601 `…Z`.
+- **Event time** (`occurred_at`, 1.2.2): `LogControl::OccurredAt()` is the only skew logic, shared by
+  the single and batch routes — `receivedAt - (sentAt - occurredAt)` when both are sent (negative age → 0),
+  `occurredAt` as given when alone, `receivedAt` otherwise; never later than `receivedAt`. Client dates
+  are strict ISO-8601 (`ClientDate`), unlike `from`/`to`. Reads filter/sort on `occurred_at`;
+  `lastLog` and purges stay on `timestamp`.
+- **Batch** (`/log/batch`, `/error/batch`): `MAX_BATCH_ENTRIES` 100, `MAX_BATCH_BYTES` 256 KB (413).
+  `environment`/`sentAt` are batch-level (400 if inside an entry); everything is validated before the
+  insert, and 400 messages name the first bad index (`entries[3]: …`). Response `{count}`, no ids.
 - **`PrepareAndExecute()` returns no affected-row count** and swallows statement errors (returns null),
-  so purge counts then deletes against one cutoff, and `Write()` treats a null id as a 500.
+  so purge counts then deletes against one cutoff, and `InsertRows()` treats a null id as a 500
+  (it also echoes `got error!`, which `InsertRows()` discards with an output buffer).
 - **Read queries validate every input** (service regex, dates via `DateTimeImmutable`, limit 1–1000, skip ≥ 0) before building SQL.
 - **Purge** writes an audit row into `logger_logs` under the reserved `service: 'logger'`
   (listed as `Logger (self)` in `/admin/services`).
@@ -88,6 +103,8 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
 | POST   | /token          | No            | Decode a token → `{decoded}` |
 | POST   | /log            | Bearer, active | Ingest any JSON object into `logger_logs` |
 | POST   | /error          | Bearer, active | Same, into `logger_errors` |
+| POST   | /log/batch      | Bearer, active | 1–100 entries, all or nothing → `{count}` |
+| POST   | /error/batch    | Bearer, active | Same, into `logger_errors` |
 | GET    | /report         | Bearer        | Own logs (from, to, limit, skip) |
 | GET    | /errors         | Bearer        | Own errors (same params) |
 | GET    | /admin/logs     | Bearer, readonly | All logs (+ `service` filter) |
@@ -107,4 +124,5 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
 - `blueprint.md` contains the original (Node) specification and build history.
 - Known clients: crawler, auth, linktree-importer (`POST /log`), api (`POST /log`, `POST /error`),
   profiles (`POST /error`), admin app (`/admin/*`, readonly credential), status (`/health-check`, `/version`).
+  Batch routes were built for offline-first mobile clients (first: a LÖVE2D game).
 - The `admin` app must read `.data` from the envelope (1.2.0); the writers ignore the body.

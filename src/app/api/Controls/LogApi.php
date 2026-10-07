@@ -13,9 +13,14 @@ class LogApi extends MagratheaApiControl {
 	/**
 	 * The raw body as a JSON object. Decoded as objects (not GetPost()'s arrays) so `{}` and `[]`
 	 * inside it are stored as sent. An empty body counts as `{}`, as it did in Node.
+	 * @param int|null $maxBytes larger bodies get a 413
 	 */
-	private function Body(): \stdClass {
-		$raw = trim((string)file_get_contents("php://input"));
+	private function Body(?int $maxBytes = null): \stdClass {
+		$raw = (string)file_get_contents("php://input");
+		if ($maxBytes !== null && strlen($raw) > $maxBytes) {
+			throw new MagratheaApiException("Body larger than ".intdiv($maxBytes, 1024)." KB", 413);
+		}
+		$raw = trim($raw);
 		if ($raw === "") return new \stdClass();
 		$body = json_decode($raw);
 		if (!($body instanceof \stdClass)) {
@@ -32,6 +37,16 @@ class LogApi extends MagratheaApiControl {
 	// POST /error
 	public function Error($params = false) {
 		return LogControl::Write(LogControl::ERRORS, $this->auth->serviceId, $this->Body());
+	}
+
+	// POST /log/batch
+	public function CreateBatch($params = false) {
+		return LogControl::WriteBatch(LogControl::LOGS, $this->auth->serviceId, $this->Body(LogControl::MAX_BATCH_BYTES));
+	}
+
+	// POST /error/batch
+	public function ErrorBatch($params = false) {
+		return LogControl::WriteBatch(LogControl::ERRORS, $this->auth->serviceId, $this->Body(LogControl::MAX_BATCH_BYTES));
 	}
 
 	// GET /report — only the caller's own logs

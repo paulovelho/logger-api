@@ -12,12 +12,28 @@ info:
 
     **Access levels**
     - any valid token: `/report`, `/errors`
-    - *active* service (not `"active": false`): `POST /log`, `POST /error`, otherwise 403
+    - *active* service (not `"active": false`): `POST /log`, `POST /error` and their `/batch`
+      routes, otherwise 403
     - *admin* credential (`"readonly": true`): every `/admin/*` route, otherwise 403
 
     **Envelope (since 1.2.0).** Every JSON response is `{success, data}`. Successes are HTTP 200.
     Errors carry the real HTTP status, with `data.message` and `data.code`.
-  version: 1.2.1
+
+    **Event time (since 1.2.2).** Each entry has a `timestamp` (when the server received it) and an
+    `occurredAt` (when it happened). Clients that queue events can send `occurredAt` and `sentAt`
+    (ISO-8601 strings, UTC unless they carry an offset). Only the gap between them, the event's
+    age, is trusted, so the phone's clock doesn't need to be right:
+
+    | Client sent | `occurredAt` stored |
+    |---|---|
+    | neither | the arrival time |
+    | `occurredAt` only | `occurredAt` as given |
+    | `occurredAt` and `sentAt` | `arrival - (sentAt - occurredAt)` |
+    | `sentAt` only | the arrival time |
+
+    A negative age counts as 0, and `occurredAt` is never later than the arrival time.
+    `from`, `to` and the newest-first order use `occurredAt`; `lastLog` and purges use `timestamp`.
+  version: 1.2.2
 servers:
   - url: /
     description: This instance
@@ -113,9 +129,10 @@ paths:
       tags: [Logs]
       summary: Ingest a log entry
       description: |
-        Stores the request body (minus `environment`) as the `data` of a new entry in `logger_logs`.
-        Any JSON object is accepted (an empty body counts as `{}`). `service` comes from the JWT.
-        `environment` is stored in its own column and defaults to `unknown`.
+        Stores the request body (minus the reserved keys `environment`, `occurredAt`, `sentAt`) as
+        the `data` of a new entry in `logger_logs`. Any JSON object is accepted (an empty body counts
+        as `{}`). `service` comes from the JWT. `environment` is stored in its own column and defaults
+        to `unknown`. `occurredAt` / `sentAt` set the event time (see the top of this page).
         Requires an active service.
       operationId: createLog
       security:
@@ -126,12 +143,22 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Payload'
-            example:
-              environment: production
-              event: user.signup
-              email: user@example.com
-              meta:
-                source: web
+            examples:
+              plain:
+                summary: Event happening now
+                value:
+                  environment: production
+                  event: user.signup
+                  email: user@example.com
+                  meta:
+                    source: web
+              queued:
+                summary: Event sent later (skew-corrected)
+                value:
+                  environment: production
+                  occurredAt: '2026-10-05T09:12:40Z'
+                  sentAt: '2026-10-07T14:03:11Z'
+                  event: game_start
       responses:
         '200':
           $ref: '#/components/responses/Created'
@@ -143,11 +170,64 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/ServerError'
+  /log/batch:
+    post:
+      tags: [Logs]
+      summary: Ingest up to 100 log entries at once
+      description: |
+        For clients that queue events (e.g. offline mobile apps). Writes to `logger_logs`.
+        `environment` and `sentAt` apply to the whole batch; each entry is a JSON object that may
+        carry its own `occurredAt` (see the top of this page); the rest of it is its `data`
+        (`{}` is stored as `{}`). Every entry gets the same `timestamp`.
+
+        **All or nothing.** Everything is validated first; any problem is a 400 and nothing is
+        stored (the message names the first offending entry, e.g. `entries[3]: must be an object`).
+        A body over 256 KB is a 413. If the database fails, nothing is stored and the response
+        is a 500. Resend the same batch after a 5xx or a network failure; drop it after a 4xx.
+        There is no deduplication: a batch sent twice is stored twice.
+
+        400 cases: the body isn't an object; `entries` is missing, not an array, empty or longer
+        than 100; an entry isn't an object, or contains `environment` or `sentAt`; `environment`,
+        `sentAt` or an entry's `occurredAt` is invalid. Requires an active service.
+      operationId: createLogBatch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Batch'
+            example:
+              environment: production
+              sentAt: '2026-10-07T14:03:11Z'
+              entries:
+                - occurredAt: '2026-10-05T09:12:40Z'
+                  event: game_start
+                  mode: classic
+                - occurredAt: '2026-10-05T09:31:02Z'
+                  event: game_over
+                  score: 18432
+      responses:
+        '200':
+          $ref: '#/components/responses/BatchStored'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /report:
     get:
       tags: [Logs]
       summary: Query own logs
-      description: The authenticated service's logs, newest first, with optional date range and pagination.
+      description: |
+        The authenticated service's logs, newest first by `occurredAt`, with an optional date range
+        (on `occurredAt`) and pagination.
       operationId: getReport
       security:
         - bearerAuth: []
@@ -196,11 +276,48 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/ServerError'
+  /error/batch:
+    post:
+      tags: [Errors]
+      summary: Ingest up to 100 error entries at once
+      description: |
+        Same as `POST /log/batch`, but stored in `logger_errors`. Requires an active service.
+      operationId: createErrorBatch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Batch'
+            example:
+              environment: production
+              sentAt: '2026-10-07T14:03:11Z'
+              entries:
+                - occurredAt: '2026-10-05T09:20:00Z'
+                  message: texture failed to load
+                  file: sprites/player.png
+      responses:
+        '200':
+          $ref: '#/components/responses/BatchStored'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '500':
+          $ref: '#/components/responses/ServerError'
   /errors:
     get:
       tags: [Errors]
       summary: Query own errors
-      description: The authenticated service's errors, newest first, with optional date range and pagination.
+      description: |
+        The authenticated service's errors, newest first by `occurredAt`, with an optional date range
+        (on `occurredAt`) and pagination.
       operationId: getErrors
       security:
         - bearerAuth: []
@@ -247,7 +364,8 @@ paths:
       tags: [Admin]
       summary: Purge one service's logs
       description: |
-        Deletes the `service`'s logs older than `olderThanDays` days (default 365), then writes an
+        Deletes the `service`'s logs received (`timestamp`) more than `olderThanDays` days ago
+        (default 365), then writes an
         audit entry into `logger_logs` under the reserved `service: "logger"`
         (`{action: "purge_logs", targetService, cutoffDays, deletedCount, performedBy}`).
       operationId: adminPurgeLogs
@@ -322,7 +440,7 @@ paths:
       description: |
         Every active service in `config.json` (including those with no logs), plus the synthetic
         `{service: "logger", name: "Logger (self)"}` that holds the purge audit trail. Counts and
-        `lastLog` come from `logger_logs` only. Sorted by `lastLog`, newest first, never-logged last.
+        `lastLog` (the latest arrival `timestamp`) come from `logger_logs` only. Sorted by `lastLog`, newest first, never-logged last.
       operationId: adminServices
       security:
         - bearerAuth: []
@@ -408,7 +526,7 @@ paths:
                         properties:
                           version:
                             type: string
-                            example: '1.2.1'
+                            example: '1.2.2'
         '500':
           $ref: '#/components/responses/ServerError'
 components:
@@ -423,15 +541,17 @@ components:
       name: from
       in: query
       description: |
-        Only entries at or after this date/time. Any format PHP's DateTimeImmutable parses
-        (e.g. `2026-10-01`, `2026-10-01T12:00:00-03:00`); UTC unless an offset is given.
+        Only entries that occurred (`occurredAt`) at or after this date/time. Any format PHP's
+        DateTimeImmutable parses (e.g. `2026-10-01`, `2026-10-01T12:00:00-03:00`); UTC unless an
+        offset is given. Entries without a client time have `occurredAt` = `timestamp`.
       schema:
         type: string
     to:
       name: to
       in: query
       description: |
-        Only entries at or before this date/time (same formats as `from`). A bare date means its
+        Only entries that occurred (`occurredAt`) at or before this date/time (same formats as
+        `from`). A bare date means its
         midnight, so `to=2026-10-01` excludes the rest of that day.
       schema:
         type: string
@@ -510,6 +630,44 @@ components:
             its string; an empty string or any other type is a 400.
           default: unknown
           example: production
+        occurredAt:
+          $ref: '#/components/schemas/ClientDate'
+        sentAt:
+          $ref: '#/components/schemas/ClientDate'
+    ClientDate:
+      type: string
+      format: date-time
+      description: |
+        Reserved key, not stored in `data`. ISO-8601 (`2026-10-05T09:12:40Z`,
+        `2026-10-05T06:12:40.250-03:00`, `2026-10-05`); UTC when there is no offset. Anything else,
+        including `null` or a number, is a 400. `occurredAt` is when the event happened, `sentAt`
+        when the client sent the request (both by the client's clock).
+      example: '2026-10-05T09:12:40Z'
+    Batch:
+      type: object
+      required: [sentAt, entries]
+      properties:
+        environment:
+          type: string
+          maxLength: 50
+          default: unknown
+          description: Applies to every entry (same rules as the single routes)
+          example: production
+        sentAt:
+          $ref: '#/components/schemas/ClientDate'
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: true
+            description: |
+              One entry. May contain `occurredAt`; must not contain `environment` or `sentAt`
+              (batch-level only). Everything else is stored as its `data`.
+            properties:
+              occurredAt:
+                $ref: '#/components/schemas/ClientDate'
     Entry:
       type: object
       properties:
@@ -527,14 +685,22 @@ components:
           type: string
           example: production
         data:
-          description: The JSON object the service posted, minus `environment`
+          description: The JSON object the service posted, minus `environment`, `occurredAt` and `sentAt`
           example:
             event: user.signup
             email: user@example.com
         timestamp:
           type: string
           format: date-time
-          example: '2026-10-05T22:59:48.000Z'
+          description: When the server received the entry (UTC, ms)
+          example: '2026-10-05T22:59:48.123Z'
+        occurredAt:
+          type: string
+          format: date-time
+          description: |
+            When the event happened (UTC, ms), skew-corrected from the client's `occurredAt` /
+            `sentAt`; equal to `timestamp` when the client sent no time. Since 1.2.2.
+          example: '2026-10-05T21:10:02.123Z'
   responses:
     Created:
       description: Entry stored
@@ -553,6 +719,28 @@ components:
                       timestamp:
                         type: string
                         format: date-time
+                        description: Arrival time
+    BatchStored:
+      description: Every entry stored
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Success'
+              - properties:
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: Entries stored (always all of them)
+                        example: 2
+    TooLarge:
+      description: Body larger than 256 KB; nothing stored
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     LogList:
       description: Matching logs
       content:

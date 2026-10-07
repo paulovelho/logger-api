@@ -59,6 +59,8 @@ class LoggerApi extends MagratheaApi {
 		$api = new LogApi($this->auth);
 		$this->Add("POST", "log", $api, "Create", self::ACTIVE, "Store any JSON payload");
 		$this->Add("POST", "error", $api, "Error", self::ACTIVE, "Store any JSON payload as an error");
+		$this->Add("POST", "log/batch", $api, "CreateBatch", self::ACTIVE, "Store 1–100 entries at once, all or nothing");
+		$this->Add("POST", "error/batch", $api, "ErrorBatch", self::ACTIVE, "Store 1–100 errors at once, all or nothing");
 		$this->Add("GET", "report", $api, "Report", self::SERVICE, "Caller's own logs (from, to, limit, skip)");
 		$this->Add("GET", "errors", $api, "Errors", self::SERVICE, "Caller's own errors (from, to, limit, skip)");
 	}

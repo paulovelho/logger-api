@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Run inside the logger container (needs its DB): ./scripts/test.sh -->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory="/tmp/logger-phpunit-cache">
+	<testsuites>
+		<testsuite name="logger">
+			<directory>tests</directory>
+		</testsuite>
+	</testsuites>
+</phpunit>

@@ -57,6 +57,10 @@ mysql -u root -p -e "CREATE USER IF NOT EXISTS '<db-user>'@'localhost' IDENTIFIE
 - The tables have to exist before the table-level `GRANT`. If you reuse a database user that
   already has access, like `guia_lol` in prod, skip the last command.
 - `schema.sql` uses `CREATE TABLE IF NOT EXISTS`, so running it again is harmless.
+- **Upgrading an existing instance** (tables created before 1.2.2): run each script in
+  `database/migrations/` newer than the version it ran, as a user with `ALTER` (e.g. root):
+  `mysql -u root -p <database> < database/migrations/1.2.2-occurred-at.sql`. The scripts are
+  safe to re-run. Run them right after `git pull`, before traffic hits the new code.
 - `DELETE` is needed by the purge routes (`DELETE /admin/logs|errors`). `DROP` is only needed by
   `./scripts/erase.sh`, which runs `TRUNCATE`.
 
@@ -175,7 +179,7 @@ URL=https://<host>
 curl $URL/health-check
 # → {"success":true,"data":{"health":"ok","time":"…","database":"ok"}}
 curl $URL/version
-# → {"success":true,"data":{"version":"1.2.1"}}
+# → {"success":true,"data":{"version":"1.2.2"}}
 
 # 2. Log in as a service from config.json
 TOKEN=$(curl -s -X POST $URL/login \

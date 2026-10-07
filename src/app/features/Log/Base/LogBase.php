@@ -9,7 +9,7 @@ use Magrathea2\MagratheaModel;
 
 class LogBase extends MagratheaModel implements iMagratheaModel {
 
-	public $id, $service, $environment, $data, $timestamp;
+	public $id, $service, $environment, $data, $timestamp, $occurred_at;
 	// not columns: CreateInsertQuery() always writes these two, so they're declared to avoid dynamic properties
 	public $created_at, $updated_at;
 	protected $autoload = null;
@@ -30,6 +30,7 @@ class LogBase extends MagratheaModel implements iMagratheaModel {
 		$this->dbValues["environment"] = "string";
 		$this->dbValues["data"] = "text";
 		$this->dbValues["timestamp"] = "datetime";
+		$this->dbValues["occurred_at"] = "datetime";
 	}
 
 	public function GetControl() {

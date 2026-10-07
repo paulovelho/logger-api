@@ -3,7 +3,7 @@ name: logger-api
 description: How to authenticate and interact with the guia.lol Logger API. Use when logging events or errors, querying logs, purging old entries, or integrating any service with the logger microservice.
 ---
 
-# Logger API (1.2+)
+# Logger API (1.2.2+)
 
 Logging microservice for guia.lol (PHP + MagratheaPHP2, MariaDB). Each service authenticates with
 its own JWT, writes arbitrary JSON, and can only read back its own entries. An admin credential
@@ -25,7 +25,7 @@ Every JSON response is the Magrathea envelope. **Read `.data`.**
 ```
 
 Successes are always HTTP 200 (Node 1.x sent 201 on `/log` and `/error`). Errors carry the real
-status (400 / 401 / 403 / 404 / 500).
+status (400 / 401 / 403 / 404 / 413 / 500).
 
 ## Auth
 
@@ -62,14 +62,14 @@ Read on every request; edits apply immediately with no restart.
 | `secret` | login secret |
 | `name` | display name (`serviceName` in results); defaults to the id |
 | `readonly` | `true` marks the **admin credential**: may call `/admin/*`. It can still write. |
-| `active` | `false` blocks `POST /log` and `POST /error` (403) and hides it from `/admin/services` |
+| `active` | `false` blocks every write (`POST /log`, `/error` and their `/batch` routes: 403) and hides it from `/admin/services` |
 
 ## Writing
 
 ### `POST /log` and `POST /error`
 
 Send any JSON object. `environment` (string ≤ 50 chars, or a number; default `unknown`) is stored in its own column;
-the rest becomes `data`. `/log` writes to `logger_logs`, `/error` to `logger_errors`. An empty
+`occurredAt` / `sentAt` (see [Event time](#event-time-occurredat-sentat)) set the event time; the rest becomes `data`. `/log` writes to `logger_logs`, `/error` to `logger_errors`. An empty
 body is stored as `{}`. A JSON array or scalar gets a 400. Requires an *active* service.
 
 ```bash
@@ -81,13 +81,60 @@ curl -X POST https://logger.guia.lol/error \
 
 Writers are usually fire-and-forget: don't let a logger failure break the caller.
 
+### Event time: `occurredAt`, `sentAt`
+
+Every entry has a `timestamp` (when the server received it) and an `occurredAt` (when it happened).
+Both keys are reserved (never stored in `data`), optional, and must be ISO-8601 strings
+(`2026-10-05T09:12:40Z`, `…-03:00`, `2026-10-05`; UTC without an offset). Anything else, including
+`null`, a number or `"now"`, is a 400.
+
+For events sent later (offline queues), send both, read from the same device clock. The server only
+trusts their difference (the event's age), so a wrong phone clock doesn't matter:
+
+| Sent | Stored `occurredAt` |
+|---|---|
+| neither | arrival time (as before 1.2.2) |
+| `occurredAt` only | as given |
+| `occurredAt` + `sentAt` | `arrival - (sentAt - occurredAt)` |
+| `sentAt` only | arrival time |
+
+A negative age counts as 0, and `occurredAt` is never later than the arrival time.
+
+### `POST /log/batch` and `POST /error/batch`
+
+Up to 100 entries per request, for clients that queue events. Same auth as `/log` (active service).
+
+```bash
+curl -X POST https://logger.guia.lol/log/batch \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $LOGGER_TOKEN" \
+  -d '{
+    "environment": "production",
+    "sentAt": "2026-10-07T14:03:11Z",
+    "entries": [
+      {"occurredAt": "2026-10-05T09:12:40Z", "event": "game_start", "mode": "classic"},
+      {"occurredAt": "2026-10-05T09:31:02Z", "event": "game_over", "score": 18432}
+    ]
+  }'
+# {"success":true,"data":{"count":2}}
+```
+
+- `sentAt` (**required**) and `environment` are batch-level. Each entry is a JSON object with an
+  optional `occurredAt` (missing → arrival time); the rest is its `data`. An entry containing
+  `environment` or `sentAt` is a 400.
+- `entries`: 1–100 items. Body ≤ 256 KB, otherwise **413**.
+- **All or nothing.** Any invalid entry → 400 naming the first one (`entries[3]: must be an object`),
+  and nothing is stored. A database failure → 500, nothing stored.
+- **Retry rule:** on a 5xx or a network failure, resend the same batch; on a 4xx, drop it (it will
+  never be accepted). There is no deduplication: if a response is lost, a resent batch is stored twice.
+- All entries share one `timestamp`. The response has no ids.
+
 ## Reading
 
 ### `GET /report` (own logs) and `GET /errors` (own errors)
 
 | Param | Default | Notes |
 |---|---|---|
-| `from`, `to` | — | any date/time PHP parses; UTC unless an offset is given; inclusive (a bare `to=2026-10-01` means its midnight) |
+| `from`, `to` | — | on **`occurredAt`**; any date/time PHP parses; UTC unless an offset is given; inclusive (a bare `to=2026-10-01` means its midnight) |
 | `limit` | 100 | clamped to 1–1000 |
 | `skip` | 0 | pagination offset |
 
@@ -97,12 +144,14 @@ Writers are usually fire-and-forget: don't let a logger failure break the caller
   "logs": [{
     "_id": 42, "service": "service-website", "serviceName": "Website",
     "environment": "production", "data": {"event": "page_view"},
-    "timestamp": "2026-10-05T22:59:48.000Z"
+    "timestamp": "2026-10-05T22:59:48.123Z",
+    "occurredAt": "2026-10-05T22:59:48.123Z"
   }]
 }}
 ```
 
-`/errors` returns the same shape with an `errors` array. Newest first.
+`/errors` returns the same shape with an `errors` array. Newest first by `occurredAt`.
+`timestamp` is the arrival time; `occurredAt` equals it unless the client sent one (UTC, ms).
 
 ## Admin (readonly credential only, otherwise 403)
 
@@ -116,8 +165,10 @@ Writers are usually fire-and-forget: don't let a logger failure break the caller
 
 - `/admin/services` lists every active configured service, including those with 0 logs, plus the
   synthetic `{service: "logger", name: "Logger (self)"}`. Counts come from `logger_logs` only.
+  `lastLog` is the latest arrival `timestamp`.
   Sorted by `lastLog`, newest first, with `null` last.
-- **Purge**: `service` is required. `olderThanDays` must be a positive whole number (default 365).
+- **Purge**: `service` is required. `olderThanDays` must be a positive whole number (default 365),
+  counted on the arrival `timestamp`.
   Each purge writes an audit row into `logger_logs` under `service: "logger"`:
   `{action: "purge_logs"|"purge_errors", targetService, cutoffDays, deletedCount, performedBy}`.
 
@@ -126,7 +177,7 @@ Writers are usually fire-and-forget: don't let a logger failure break the caller
 | Path | `data` |
 |---|---|
 | `GET /health-check` | `{health: "ok", time: "2026-10-05 22:59:48", database: "ok"\|"fail"}` |
-| `GET /version` | `{version: "1.2.1"}` |
+| `GET /version` | `{version: "1.2.2"}` |
 | `POST /token` `{token}` | `{decoded}` (400 with the JWT error message if invalid) |
 
 ## Examples
@@ -153,6 +204,21 @@ async function call(path, { token, method = 'GET', body } = {}) {
 const { token } = await call('/login', { method: 'POST', body: { service: 'service-website', secret } });
 await call('/log', { token, method: 'POST', body: { environment: 'production', event: 'signup' } });
 const { total, logs } = await call('/report?limit=50', { token });
+
+// offline queue: flush up to 100 at a time; keep the batch on 5xx/network errors, drop it on 4xx
+async function flush(queue, token) {
+  const batch = queue.slice(0, 100);
+  let status;
+  try {
+    const res = await fetch(LOGGER_URL + '/log/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ environment: 'production', sentAt: new Date().toISOString(), entries: batch }),
+    });
+    status = res.status;
+  } catch { return; }                                    // network failure: retry later
+  if (status < 500) queue.splice(0, batch.length);       // 200 stored, 4xx never will be
+}
 ```
 
 ### PHP (curl)
