@@ -35,7 +35,7 @@ class BatchTest extends LoggerTestCase {
 			$this->assertSame("production", $row["environment"]);
 			$this->assertArrayNotHasKey("occurredAt", json_decode($row["data"], true));
 		}
-		$at = fn(string $age) => (new \DateTimeImmutable($received, new \DateTimeZone("UTC")))->modify($age)->format("Y-m-d H:i:s.v");
+		$at = fn(string $age) => self::Sql(self::Stored($received)->modify($age)->format(DATE_RFC3339_EXTENDED));
 		// sentAt - occurredAt = 2d 4:50:31 and 2d 4:32:09
 		$this->assertSame($at("-2 days -4 hours -50 minutes -31 seconds"), $rows[0]["occurred_at"]);
 		$this->assertSame($at("-2 days -4 hours -32 minutes -9 seconds"), $rows[1]["occurred_at"]);

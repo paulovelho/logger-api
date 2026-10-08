@@ -65,8 +65,12 @@ src-node/                      Archived Node version (last: 1.1.2, same tables) 
   out; the rest of the body goes to `data` (decoded as objects so `{}` stays `{}`). Every write goes
   through `LogControl::InsertRows()`: one multi-row prepared INSERT (atomic in InnoDB; the vendor
   opens a new connection per query, so a real transaction isn't possible). `timestamp` (arrival) is
-  one `NOW(3)` reading per request — the DB clock, same as before and as purge — and is returned as
-  ISO-8601 `…Z`.
+  one PHP clock reading per request (`ReceivedAt()`, cut to ms; purge cutoffs use the same clock) and
+  is returned as ISO-8601 `…Z`.
+- **Timezone** (1.2.3): never `NOW()` — the DB clock may not be UTC (and `SET time_zone` wouldn't
+  survive the vendor's per-query connections). Columns are stored in Magrathea's timezone
+  (`timezone` in magrathea.conf = PHP's default; `LogControl::Zone()`, via `Sql()` / `IsoDate()`);
+  the API's inputs and outputs are UTC, so the stored zone is invisible to clients.
 - **Event time** (`occurred_at`, 1.2.2): `LogControl::OccurredAt()` is the only skew logic, shared by
   the single and batch routes — `receivedAt - (sentAt - occurredAt)` when both are sent (negative age → 0),
   `occurredAt` as given when alone, `receivedAt` otherwise; never later than `receivedAt`. Client dates

@@ -82,14 +82,14 @@ Keep `use_environment = "production"` and fill in the `[production]` section:
 | `db_host`, `db_name`, `db_user`, `db_pass` | the database from step 3 |
 | `logs_path`, `cache_path` | `<path>/logs` and `<path>/cache` |
 | `jwt_key` | **at least 32 bytes**: `openssl rand -base64 48` |
-| `timezone` | keep `UTC`: the DB fills `timestamp`, and the API labels it UTC (`…Z`) |
+| `timezone` | the zone dates are **stored** in (e.g. `UTC`, `America/Sao_Paulo`). The API reads and returns UTC either way. Don't change it on an instance that already has data: old rows would be read in the new zone |
 
 > ⚠️ `jwt_key` signs every service token. Changing it invalidates all tokens already issued, so
 > every service has to log in again. A key under 32 bytes makes `/login` and every authenticated
 > route answer 500 `jwt_key (magrathea.conf) must be at least 32 bytes`.
 
-> ⚠️ The database server's clock must be UTC. Check `SELECT @@global.time_zone, @@system_time_zone`.
-> Otherwise every timestamp is off by the server's offset.
+> The database server's clock doesn't matter (since 1.2.3): every date comes from PHP's clock.
+> Before 1.2.3 it had to be UTC.
 
 ## 5. Writable folders
 
@@ -184,7 +184,7 @@ URL=https://<host>
 curl $URL/health-check
 # → {"success":true,"data":{"health":"ok","time":"…","database":"ok"}}
 curl $URL/version
-# → {"success":true,"data":{"version":"1.2.2"}}
+# → {"success":true,"data":{"version":"1.2.3"}}
 
 # 2. Log in as a service from config.json
 TOKEN=$(curl -s -X POST $URL/login \
@@ -268,7 +268,7 @@ reads and writes the **same tables**, so nothing is migrated, and the old logs s
    - **32 or more**: reuse it as `jwt_key`. Every token the clients already hold keeps working.
    - **Under 32**: generate a new key (`openssl rand -base64 48`). At the switch, log every client
      in again (table in step 10) and update its token.
-2. **DB timezone.** `SELECT @@global.time_zone, @@system_time_zone` must be UTC (see step 4).
+2. **Timezone.** Node stored UTC: keep `timezone = "UTC"` in `magrathea.conf` (see step 4).
 3. **Pull and install** (the Node container keeps running until step 5):
    ```bash
    git pull

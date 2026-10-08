@@ -1,3 +1,9 @@
+### 1.2.3
+2026-10
+	- **fix:** `timestamp`, `occurredAt` and `lastLog` were off by the database server's UTC offset when its clock wasn't UTC (and so were `from`/`to` filters and purge cutoffs): the arrival time and the purge cutoff were read from the database's `NOW()`, then labelled UTC. Both now come from PHP's clock, so the database's timezone no longer matters
+	- **change:** both columns are stored in Magrathea's timezone (`timezone` in `magrathea.conf`); the API still reads and returns every date in UTC (`…Z`), so clients see no difference. Instances with `timezone = "UTC"` store exactly what they did before
+	- **note:** rows written before 1.2.3 on an instance whose database clock wasn't in `timezone` keep the wrong time; shift them by the offset (`UPDATE … SET timestamp = timestamp + INTERVAL …, occurred_at = occurred_at + INTERVAL …`) or purge them
+
 ### 1.2.2
 2026-10
 	- **new:** `POST /log/batch` and `POST /error/batch` — 1–100 entries per request (body ≤ 256 KB, otherwise 413), all or nothing: any invalid entry is a 400 naming it (`entries[3]: must be an object`) and nothing is stored; a database failure stores nothing and returns 500. Response `{count}`

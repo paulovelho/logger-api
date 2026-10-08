@@ -65,13 +65,12 @@ class WriteTest extends LoggerTestCase {
 		$data = json_decode($row["data"], true);
 		$this->assertArrayNotHasKey("occurredAt", $data);
 		$this->assertArrayNotHasKey("sentAt", $data);
-		$received = new \DateTimeImmutable($row["timestamp"], new \DateTimeZone("UTC"));
-		$this->assertSame($received->modify("-1 hour")->format("Y-m-d H:i:s.v"), $row["occurred_at"]);
+		$this->assertSame(self::Sql(self::Stored($row["timestamp"])->modify("-1 hour")->format(DATE_RFC3339_EXTENDED)), $row["occurred_at"]);
 	}
 
 	public function testOccurredAtOnlyIsKept(): void {
 		self::Http("POST", "/error", self::Data("given", [ "occurredAt" => "2026-01-01T09:00:00.250-03:00" ]));
-		$this->assertSame("2026-01-01 12:00:00.250", self::Rows(LogControl::ERRORS, "given")[0]["occurred_at"]);
+		$this->assertSame(self::Sql("2026-01-01T12:00:00.250Z"), self::Rows(LogControl::ERRORS, "given")[0]["occurred_at"]);
 	}
 
 	public static function BadDates(): array {

@@ -33,7 +33,7 @@ info:
 
     A negative age counts as 0, and `occurredAt` is never later than the arrival time.
     `from`, `to` and the newest-first order use `occurredAt`; `lastLog` and purges use `timestamp`.
-  version: 1.2.2
+  version: 1.2.3
 servers:
   - url: /
     description: This instance
@@ -505,7 +505,7 @@ paths:
                             example: ok
                           time:
                             type: string
-                            description: Server time, UTC
+                            description: Server time, in the instance's timezone (`timezone` in magrathea.conf)
                             example: '2026-10-05 22:59:48'
   /version:
     get:
@@ -526,7 +526,7 @@ paths:
                         properties:
                           version:
                             type: string
-                            example: '1.2.2'
+                            example: '1.2.3'
         '500':
           $ref: '#/components/responses/ServerError'
 components:

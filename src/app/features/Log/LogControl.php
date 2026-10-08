@@ -10,6 +10,8 @@ use Magrathea2\Exceptions\MagratheaApiException;
  * Reads, writes and purges for both tables (`logger_logs`, `logger_errors`: same columns).
  * Every input is validated and re-formatted here before it reaches SQL: Query::Clean is
  * too weak to rely on, and PrepareAndExecute() can't return rows.
+ * Dates are stored in Magrathea's timezone (`timezone` in magrathea.conf) and come from PHP's
+ * clock, never the DB's; the API reads and returns them in UTC.
  */
 class LogControl extends \logger\Log\Base\LogControlBase {
 
@@ -149,11 +151,18 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 		return $environment;
 	}
 
-	/** One clock reading per request, from the same clock that filled `timestamp` (and purges compare against). */
+	/**
+	 * One clock reading per request, from the same clock purges compare against. Cut to the
+	 * milliseconds the columns keep, so the `timestamp` returned is exactly the stored one.
+	 */
 	private static function ReceivedAt(): \DateTimeImmutable {
-		$now = Database::Instance()->QueryOne("SELECT DATE_FORMAT(NOW(3), '%Y-%m-%d %H:%i:%s.%f')");
-		if (!is_string($now)) throw new MagratheaApiException("Failed to read the server time", 500);
-		return new \DateTimeImmutable($now, new \DateTimeZone("UTC"));
+		$now = new \DateTimeImmutable("now", new \DateTimeZone("UTC"));
+		return $now->setTime((int)$now->format("G"), (int)$now->format("i"), (int)$now->format("s"), (int)$now->format("v") * 1000);
+	}
+
+	/** Magrathea's timezone: MagratheaPHP::Load() sets it as PHP's default. The stored dates are in it. */
+	private static function Zone(): \DateTimeZone {
+		return new \DateTimeZone(date_default_timezone_get());
 	}
 
 	/** Keeps `occurred_at` inside DATETIME's range (a huge age can push it before year 1000). */
@@ -217,16 +226,16 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 		return $id;
 	}
 
-	/** UTC `Y-m-d H:i:s.v`, for the DATETIME(3) columns. */
+	/** `Y-m-d H:i:s.v` in Magrathea's timezone, for the DATETIME(3) columns. */
 	private static function Sql(\DateTimeImmutable $date): string {
-		return $date->setTimezone(new \DateTimeZone("UTC"))->format("Y-m-d H:i:s.v");
+		return $date->setTimezone(self::Zone())->format("Y-m-d H:i:s.v");
 	}
 
 	private static function Iso(\DateTimeImmutable $date): string {
 		return $date->setTimezone(new \DateTimeZone("UTC"))->format("Y-m-d\TH:i:s.v\Z");
 	}
 
-	/** Parses any date string DateTimeImmutable accepts and returns it as UTC `Y-m-d H:i:s.v`. */
+	/** Parses any date string DateTimeImmutable accepts (UTC unless it has an offset) and returns it as Sql(). */
 	private static function SqlDate(string $value, string $name): string {
 		try {
 			$date = new \DateTimeImmutable($value, new \DateTimeZone("UTC"));
@@ -330,8 +339,7 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 		$table = self::Table($table);
 		if (!self::ValidService($service)) throw new MagratheaApiException("Invalid 'service'", 400);
 		$db = Database::Instance();
-		$cutoff = $db->QueryOne("SELECT DATE_FORMAT(NOW() - INTERVAL ".$days." DAY, '%Y-%m-%d %H:%i:%s')");
-		if (!is_string($cutoff)) throw new MagratheaApiException("Failed to purge", 500);
+		$cutoff = self::Sql(self::ReceivedAt()->modify("-".$days." days"));
 		$whereSql = " WHERE `service` = '".$service."' AND `timestamp` < '".$cutoff."'";
 		$deleted = (int)$db->QueryOne("SELECT COUNT(*) FROM `".$table."`".$whereSql);
 		if ($deleted > 0 && $db->Query("DELETE FROM `".$table."`".$whereSql) === false) {
@@ -361,10 +369,9 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 		];
 	}
 
-	/** `2026-10-05 12:00:00.123` (UTC, from DB) → `2026-10-05T12:00:00.123Z` */
+	/** `2026-10-05 09:00:00.123` (from DB, Magrathea's timezone: here -03:00) → `2026-10-05T12:00:00.123Z` */
 	public static function IsoDate(?string $sqlDate): ?string {
 		if ($sqlDate === null) return null;
-		$date = new \DateTimeImmutable($sqlDate, new \DateTimeZone("UTC"));
-		return $date->format("Y-m-d\TH:i:s.v\Z");
+		return self::Iso(new \DateTimeImmutable($sqlDate, self::Zone()));
 	}
 }

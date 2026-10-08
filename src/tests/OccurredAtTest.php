@@ -82,4 +82,15 @@ class OccurredAtTest extends TestCase {
 			$this->assertStringStartsWith("entries[2]: Invalid 'occurredAt'", $ex->getMessage());
 		}
 	}
+
+	/** Stored dates are in Magrathea's timezone (PHP's default); the API returns them in UTC. */
+	public function testStoredDatesAreReadInMagratheaTimezone(): void {
+		$zone = date_default_timezone_get();
+		date_default_timezone_set("America/Sao_Paulo");
+		try {
+			$this->assertSame("2026-10-08T12:00:00.250Z", LogControl::IsoDate("2026-10-08 09:00:00.250"));
+		} finally {
+			date_default_timezone_set($zone);
+		}
+	}
 }

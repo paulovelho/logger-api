@@ -90,6 +90,16 @@ abstract class LoggerTestCase extends TestCase {
 		return array_map(fn($r) => (array)$r, Database::Instance()->QueryAll($sql." ORDER BY `id`"));
 	}
 
+	/** A stored DATETIME (Magrathea's timezone) as a date. */
+	protected static function Stored(string $sql): \DateTimeImmutable {
+		return new \DateTimeImmutable($sql, new \DateTimeZone(date_default_timezone_get()));
+	}
+
+	/** A date as the DATETIME(3) value stored for it. */
+	protected static function Sql(string $date): string {
+		return (new \DateTimeImmutable($date))->setTimezone(new \DateTimeZone(date_default_timezone_get()))->format("Y-m-d H:i:s.v");
+	}
+
 	/** A data object tagged with this run, so it can be found and cleaned up. */
 	protected static function Data(string $tag, array $extra = []): array {
 		return [ "testRun" => self::$run, "tag" => $tag ] + $extra;
