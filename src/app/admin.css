@@ -81,11 +81,31 @@ body {
 
 header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
 }
 
 h1 { font-size: 1.1rem; margin: 0; }
+
+.header-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.service-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #8b919c;
+}
+
+/* a filtered view must not pass for "all" */
+.service-filter.active select { border-color: #7aa2f7; color: #7aa2f7; }
 
 .header-actions {
   display: flex;
@@ -150,6 +170,8 @@ h1 { font-size: 1.1rem; margin: 0; }
   font-size: 0.75rem;
   padding: 0.3rem 0.5rem;
 }
+
+.preset.active { border-color: #7aa2f7; color: #7aa2f7; }
 
 .autorefresh-label {
   display: flex;
@@ -252,6 +274,7 @@ tbody tr:hover { background: #1a1d22; }
 }
 
 .service-card:hover { border-color: #7aa2f7; }
+.service-card.selected { border-color: #7aa2f7; background: #222631; }
 
 .service-name {
   font-size: 0.95rem;

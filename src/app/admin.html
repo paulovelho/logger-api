@@ -22,7 +22,12 @@
 
   <div id="app" hidden>
     <header>
-      <h1>Logger Admin</h1>
+      <div class="header-main">
+        <h1>Logger Admin</h1>
+        <label class="service-filter" id="service-filter">service
+          <select id="service"><option value="">all</option></select>
+        </label>
+      </div>
       <div class="header-actions">
         <span id="logged-as"></span>
         <button id="logout-btn">sign out</button>
@@ -39,9 +44,6 @@
 
     <div id="tab-logs" class="tab-panel">
       <div class="filters">
-        <label>service
-          <select id="logs-service"><option value="">all</option></select>
-        </label>
         <label>from
           <input type="datetime-local" id="logs-from" />
         </label>
@@ -90,9 +92,6 @@
 
     <div id="tab-errors" class="tab-panel" hidden>
       <div class="filters">
-        <label>service
-          <select id="errors-service"><option value="">all</option></select>
-        </label>
         <label>from
           <input type="datetime-local" id="errors-from" />
         </label>

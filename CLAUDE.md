@@ -91,6 +91,8 @@ docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
 - **Read queries validate every input** (service regex, dates via `DateTimeImmutable`, limit 1–1000, skip ≥ 0) before building SQL.
 - **Purge** writes an audit row into `logger_logs` under the reserved `service: 'logger'`
   (listed as `Logger (self)` in `/admin/services`).
+- **Caching:** every API response is `no-store` (`DisableCache()` in `LoggerApi::Initialize`); the static
+  pages are `no-cache` (`.htaccess` FilesMatch / Caddy `@static`), so they revalidate by ETag.
 - **No basic auth on `/admin*`** — the admin API is Bearer + readonly, and the admin app calls it
   cross-origin (CORS from `cors-origins.json`). `/admin` (dashboard) is a public shell with a login form.
 - Magrathea lower-cases column names in results — use snake_case SQL aliases.

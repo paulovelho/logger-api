@@ -78,6 +78,10 @@
 	header @admin Content-Security-Policy "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' https://cdnjs.cloudflare.com; frame-src 'self'"
 	header @magrathea Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://code.jquery.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net https://unpkg.com; frame-ancestors 'none'"
 	header @other Content-Security-Policy "default-src 'self';"
+	# Static pages revalidate (ETag) on every load, so a deploy shows up without a hard refresh.
+	# (API responses send their own Cache-Control: no-store, from LoggerApi.)
+	@static path /admin /admin/ /admin.html /admin.js /admin.css /docs /docs/ /docs.html /openapi.yaml
+	header @static Cache-Control "no-cache"
 
 	encode gzip
 }

@@ -40,6 +40,11 @@ SetEnvIf Authorization .+ HTTP_AUTHORIZATION=$0
 	Header always set X-Frame-Options "DENY"
 	Header always set X-XSS-Protection "1; mode=block"
 	Header always set Referrer-Policy "no-referrer-when-downgrade"
+	# Static pages revalidate (ETag) on every load, so a deploy shows up without a hard refresh.
+	# (API responses send their own Cache-Control: no-store, from LoggerApi.)
+	<FilesMatch "^(admin\.(html|js|css)|docs\.html|openapi\.yaml)$">
+		Header set Cache-Control "no-cache"
+	</FilesMatch>
 	# /docs is Swagger UI: loaded from unpkg.com with an inline init script; the admin embeds it in an iframe
 	<If "%{REQUEST_URI} =~ m#^/docs#">
 		Header always set X-Frame-Options "SAMEORIGIN"

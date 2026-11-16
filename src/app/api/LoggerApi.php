@@ -18,6 +18,8 @@ class LoggerApi extends MagratheaApi {
 	}
 
 	public function Initialize() {
+		// Entries change all the time: no browser or proxy may answer a read from its cache
+		$this->DisableCache();
 		$this->Cors();
 		$this->SetAuth();
 		$this->General();

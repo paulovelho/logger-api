@@ -14,6 +14,7 @@ function authHeaders() {
 
 async function authedFetch(url, options = {}) {
   const res = await fetch(url, {
+    cache: 'no-store',
     ...options,
     headers: { ...authHeaders(), ...(options.headers || {}) },
   });
@@ -79,147 +80,165 @@ $('login-form').addEventListener('submit', async (e) => {
 
 $('logout-btn').addEventListener('click', () => {
   clearToken();
-  stopAutoRefresh('logs');
-  stopAutoRefresh('errors');
+  Object.keys(panels).forEach((name) => stopAutoRefresh(name));
   showLogin();
+});
+
+// ── Lists (logs, errors) ──────────────────────────────────────────────────────
+
+// One entry per list tab; its name is also its /admin/<name> route and the response's list key.
+// hours: the rolling date preset (1h / 24h / 7d), null when from/to are set by hand.
+// seq: bumped on every load, so a slower, older response can't overwrite a newer one.
+const panels = {
+  logs:   { skip: 0, hours: null, seq: 0, timer: null },
+  errors: { skip: 0, hours: null, seq: 0, timer: null },
+};
+
+// ── Service filter (top bar; applies to every list) ───────────────────────────
+
+let service = localStorage.getItem('admin_service') || '';
+
+function setService(value) {
+  service = value;
+  if (service) localStorage.setItem('admin_service', service);
+  else localStorage.removeItem('admin_service');
+  $('service').value = service;
+  $('service-filter').classList.toggle('active', service !== '');
+  for (const p of Object.values(panels)) p.skip = 0;
+  document.querySelectorAll('.service-card').forEach((c) => c.classList.toggle('selected', c.dataset.service === service));
+}
+
+// The selected service stays listed even when /admin/services doesn't return it (inactive, or not loaded yet)
+function renderServiceOptions(services) {
+  const options = services.map((s) => [s.service, s.name || s.service]);
+  if (service && !options.some(([id]) => id === service)) options.push([service, service]);
+  const sel = $('service');
+  sel.innerHTML = '<option value="">all</option>';
+  for (const [id, name] of options) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  sel.value = service;
+}
+
+$('service').addEventListener('change', () => {
+  setService($('service').value);
+  if (panels[activeTab]) loadPanel(activeTab);
 });
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 let activeTab = 'logs';
 
+// Lists reload on every visit, so they are never older than the moment they were opened
+function showTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach((p) => p.hidden = p.id !== 'tab-' + tab);
+  if (tab === 'services') loadServices();
+  if (panels[tab]) loadPanel(tab);
+}
+
 document.querySelectorAll('.tab').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    activeTab = btn.dataset.tab;
-    document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.tab-panel').forEach((p) => p.hidden = true);
-    $('tab-' + activeTab).hidden = false;
-    if (activeTab === 'services') loadServices();
-  });
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
 });
 
 // ── Date presets ──────────────────────────────────────────────────────────────
 
-function applyPreset(panel, hours) {
-  if (hours === null) {
-    $(panel + '-from').value = '';
-    $(panel + '-to').value = '';
-  } else {
-    const now = new Date();
-    const from = new Date(now - hours * 3600 * 1000);
-    $(panel + '-from').value = toLocalInput(from);
-    $(panel + '-to').value = toLocalInput(now);
-  }
-}
+// 1h / 24h / 7d are rolling: every load (refresh, auto-refresh, paging) recomputes `from` and leaves
+// `to` open, so new entries show up. A `to` fixed at the click froze the list at that moment.
+// Editing from/to by hand turns the preset off; "all" clears both.
 
 function toLocalInput(date) {
   const d = new Date(date - date.getTimezoneOffset() * 60000);
   return d.toISOString().slice(0, 16);
 }
 
-['logs', 'errors'].forEach((panel) => {
-  $('tab-' + panel).querySelectorAll('.preset').forEach((btn) => {
+function markPreset(name, hours) {
+  panels[name].hours = hours;
+  $('tab-' + name).querySelectorAll('.preset').forEach((b) =>
+    b.classList.toggle('active', hours !== null && Number(b.dataset.hours) === hours));
+}
+
+Object.keys(panels).forEach((name) => {
+  $('tab-' + name).querySelectorAll('.preset').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const hours = btn.dataset.clear !== undefined ? null : Number(btn.dataset.hours);
-      applyPreset(panel, hours);
+      markPreset(name, btn.dataset.clear !== undefined ? null : Number(btn.dataset.hours));
+      $(name + '-from').value = '';
+      $(name + '-to').value = '';
+      panels[name].skip = 0;
+      loadPanel(name);
     });
   });
+  for (const id of [name + '-from', name + '-to']) {
+    $(id).addEventListener('input', () => markPreset(name, null));
+  }
 });
 
 // ── Auto-refresh ──────────────────────────────────────────────────────────────
 
-const timers = { logs: null, errors: null };
-
-function stopAutoRefresh(panel) {
-  if (timers[panel]) { clearInterval(timers[panel]); timers[panel] = null; }
+function stopAutoRefresh(name) {
+  const p = panels[name];
+  if (p.timer) { clearInterval(p.timer); p.timer = null; }
 }
 
-function syncAutoRefresh(panel, loadFn) {
-  stopAutoRefresh(panel);
-  if ($(panel + '-autorefresh').checked) {
-    const secs = Number($(panel + '-autorefresh-interval').value);
-    timers[panel] = setInterval(loadFn, secs * 1000);
+function syncAutoRefresh(name) {
+  stopAutoRefresh(name);
+  if ($(name + '-autorefresh').checked) {
+    const secs = Number($(name + '-autorefresh-interval').value);
+    panels[name].timer = setInterval(() => loadPanel(name), secs * 1000);
   }
 }
 
-// ── Logs ──────────────────────────────────────────────────────────────────────
+// ── Loading a list ────────────────────────────────────────────────────────────
 
-let logsSkip = 0;
-let logsTotal = 0;
+async function loadPanel(name) {
+  const p = panels[name];
+  const seq = ++p.seq;
+  if (p.hours !== null) {
+    $(name + '-from').value = toLocalInput(new Date(Date.now() - p.hours * 3600 * 1000));
+    $(name + '-to').value = '';
+  }
 
-async function loadLogs() {
-  const limit = Number($('logs-limit').value);
-  const params = new URLSearchParams({ limit, skip: logsSkip });
-  if ($('logs-service').value) params.set('service', $('logs-service').value);
-  if ($('logs-from').value) params.set('from', new Date($('logs-from').value).toISOString());
-  if ($('logs-to').value) params.set('to', new Date($('logs-to').value).toISOString());
+  const limit = Number($(name + '-limit').value);
+  const params = new URLSearchParams({ limit, skip: p.skip });
+  if (service) params.set('service', service);
+  if ($(name + '-from').value) params.set('from', new Date($(name + '-from').value).toISOString());
+  if ($(name + '-to').value) params.set('to', new Date($(name + '-to').value).toISOString());
 
-  const rows = $('logs-rows');
+  const rows = $(name + '-rows');
   try {
-    const res = await authedFetch('/admin/logs?' + params);
+    const res = await authedFetch('/admin/' + name + '?' + params);
     if (!res) return;
     const data = await unwrap(res);
-    logsTotal = data.total;
+    if (seq !== p.seq) return;
 
     rows.innerHTML = '';
-    for (const log of data.logs) {
-      rows.appendChild(makeRow(log.occurredAt || log.timestamp, log.serviceName || log.service, log.data));
+    for (const entry of data[name]) {
+      rows.appendChild(makeRow(entry.occurredAt || entry.timestamp, entry.serviceName || entry.service, entry.data));
     }
 
-    $('logs-summary').textContent = `${logsTotal} total — showing ${data.count}`;
-    updatePager('logs', logsSkip, limit, logsTotal);
+    $(name + '-summary').textContent = `${data.total} total — showing ${data.count}`;
+    updatePager(name, p.skip, limit, data.total);
   } catch (err) {
+    if (seq !== p.seq) return;
     rows.innerHTML = '';
-    $('logs-summary').innerHTML = `<span class="error">Failed to load: ${err.message}</span>`;
+    showFailure($(name + '-summary'), err);
   }
 }
 
-$('logs-apply').addEventListener('click', () => { logsSkip = 0; loadLogs(); });
-$('logs-refresh').addEventListener('click', loadLogs);
-$('logs-prev').addEventListener('click', () => { logsSkip = Math.max(0, logsSkip - Number($('logs-limit').value)); loadLogs(); });
-$('logs-next').addEventListener('click', () => { logsSkip += Number($('logs-limit').value); loadLogs(); });
-$('logs-autorefresh').addEventListener('change', () => syncAutoRefresh('logs', loadLogs));
-$('logs-autorefresh-interval').addEventListener('change', () => syncAutoRefresh('logs', loadLogs));
-
-// ── Errors ────────────────────────────────────────────────────────────────────
-
-let errorsSkip = 0;
-let errorsTotal = 0;
-
-async function loadErrors() {
-  const limit = Number($('errors-limit').value);
-  const params = new URLSearchParams({ limit, skip: errorsSkip });
-  if ($('errors-service').value) params.set('service', $('errors-service').value);
-  if ($('errors-from').value) params.set('from', new Date($('errors-from').value).toISOString());
-  if ($('errors-to').value) params.set('to', new Date($('errors-to').value).toISOString());
-
-  const rows = $('errors-rows');
-  try {
-    const res = await authedFetch('/admin/errors?' + params);
-    if (!res) return;
-    const data = await unwrap(res);
-    errorsTotal = data.total;
-
-    rows.innerHTML = '';
-    for (const err of data.errors) {
-      rows.appendChild(makeRow(err.occurredAt || err.timestamp, err.serviceName || err.service, err.data));
-    }
-
-    $('errors-summary').textContent = `${errorsTotal} total — showing ${data.count}`;
-    updatePager('errors', errorsSkip, limit, errorsTotal);
-  } catch (err) {
-    rows.innerHTML = '';
-    $('errors-summary').innerHTML = `<span class="error">Failed to load: ${err.message}</span>`;
-  }
-}
-
-$('errors-apply').addEventListener('click', () => { errorsSkip = 0; loadErrors(); });
-$('errors-refresh').addEventListener('click', loadErrors);
-$('errors-prev').addEventListener('click', () => { errorsSkip = Math.max(0, errorsSkip - Number($('errors-limit').value)); loadErrors(); });
-$('errors-next').addEventListener('click', () => { errorsSkip += Number($('errors-limit').value); loadErrors(); });
-$('errors-autorefresh').addEventListener('change', () => syncAutoRefresh('errors', loadErrors));
-$('errors-autorefresh-interval').addEventListener('change', () => syncAutoRefresh('errors', loadErrors));
+Object.keys(panels).forEach((name) => {
+  const p = panels[name];
+  const limit = () => Number($(name + '-limit').value);
+  $(name + '-apply').addEventListener('click', () => { p.skip = 0; loadPanel(name); });
+  $(name + '-refresh').addEventListener('click', () => loadPanel(name));
+  $(name + '-prev').addEventListener('click', () => { p.skip = Math.max(0, p.skip - limit()); loadPanel(name); });
+  $(name + '-next').addEventListener('click', () => { p.skip += limit(); loadPanel(name); });
+  $(name + '-autorefresh').addEventListener('change', () => syncAutoRefresh(name));
+  $(name + '-autorefresh-interval').addEventListener('change', () => syncAutoRefresh(name));
+});
 
 // ── Services ──────────────────────────────────────────────────────────────────
 
@@ -230,27 +249,16 @@ async function loadServices() {
     if (!res) return;
     const { services } = await unwrap(res);
 
-    // Populate service filter selects
-    ['logs-service', 'errors-service'].forEach((selId) => {
-      const sel = $(selId);
-      const current = sel.value;
-      sel.innerHTML = '<option value="">all</option>';
-      for (const s of services) {
-        const opt = document.createElement('option');
-        opt.value = s.service;
-        opt.textContent = s.service;
-        if (s.service === current) opt.selected = true;
-        sel.appendChild(opt);
-      }
-    });
+    renderServiceOptions(services);
 
-    // Render services tab
     grid.innerHTML = '';
     $('services-summary').textContent = `${services.length} service${services.length !== 1 ? 's' : ''}`;
 
     for (const s of services) {
       const card = document.createElement('div');
       card.className = 'service-card';
+      card.dataset.service = s.service;
+      card.classList.toggle('selected', s.service === service);
       const last = s.lastLog ? new Date(s.lastLog).toLocaleString() : 'never';
       for (const [cls, text] of [
         ['service-name', s.name],
@@ -262,21 +270,28 @@ async function loadServices() {
         div.textContent = text;
         card.appendChild(div);
       }
+      // Selects the service in the top bar (every list) and opens its logs
       card.addEventListener('click', () => {
-        $('errors-service').value = s.service;
-        errorsSkip = 0;
-        document.querySelector('.tab[data-tab="errors"]').click();
-        loadErrors();
+        setService(s.service);
+        showTab('logs');
       });
       grid.appendChild(card);
     }
   } catch (err) {
     grid.innerHTML = '';
-    $('services-summary').innerHTML = `<span class="error">Failed to load: ${err.message}</span>`;
+    showFailure($('services-summary'), err);
   }
 }
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
+
+// The message can come from the server: text, never HTML
+function showFailure(el, err) {
+  const span = document.createElement('span');
+  span.className = 'error';
+  span.textContent = 'Failed to load: ' + err.message;
+  el.replaceChildren(span);
+}
 
 function makeRow(timestamp, service, data) {
   const tr = document.createElement('tr');
@@ -376,8 +391,10 @@ $('token-decode-btn').addEventListener('click', async () => {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 function init() {
+  renderServiceOptions([]);   // the remembered service shows before /admin/services answers
+  setService(service);
   loadServices();
-  loadLogs();
+  if (panels[activeTab]) loadPanel(activeTab);
 }
 
 if (getToken()) {
