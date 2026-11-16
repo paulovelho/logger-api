@@ -1,8 +1,8 @@
 <?php
 namespace logger;
 
-use Magrathea2\MagratheaApi;
-use Magrathea2\MagratheaPHP;
+use Magrathea\MagratheaApi;
+use Magrathea\MagratheaPHP;
 
 class LoggerApi extends MagratheaApi {
 
@@ -18,7 +18,6 @@ class LoggerApi extends MagratheaApi {
 	}
 
 	public function Initialize() {
-		MagratheaPHP::Instance()->StartDb();
 		$this->Cors();
 		$this->SetAuth();
 		$this->General();
@@ -52,7 +51,7 @@ class LoggerApi extends MagratheaApi {
 		$this->Add("GET", "version", null, function() {
 			$version = @file_get_contents(MagratheaPHP::Instance()->GetAppRoot()."/../version");
 			if ($version === false) $version = @file_get_contents($this->RootFile("version"));
-			if ($version === false) throw new \Magrathea2\Exceptions\MagratheaApiException("version file not found", 500);
+			if ($version === false) throw new \Magrathea\Exceptions\MagratheaApiException("version file not found", 500);
 			return [ "version" => trim($version) ];
 		}, self::PUBLIC, "Release version");
 	}
@@ -76,12 +75,12 @@ class LoggerApi extends MagratheaApi {
 		$this->Add("DELETE", "admin/errors", $api, "PurgeErrors", self::ADMIN, "Delete a service's errors older than olderThanDays (default 365)");
 	}
 
-	// The vendor sends generic errors (unknown route, non-Magrathea exceptions) as HTTP 200;
-	// use the error code as the status when it is one, 500 otherwise. Exceptions that aren't
-	// MagratheaApiExceptions (DB failures, mysqli codes like 2002) are logged and answered with a
-	// generic message: their message and public fields can carry SQL or connection details.
-	public function ReturnError($code=500, $message="", $data=null, $status=200) {
-		if ($status == 200) $status = (is_int($code) && $code >= 400 && $code <= 599) ? $code : 500;
+	// The status is the error code when it is an HTTP status (400–599), 500 otherwise. Exceptions
+	// that aren't MagratheaApiExceptions (DB failures, whose code is MySQL's errno) are logged and
+	// answered with a generic message: the vendor would send the exception itself as `error`, and
+	// MagratheaDBException's public query/values/fullMessage carry the SQL and its values.
+	public function ReturnError($code=500, $message="", $data=null, ?int $status=null) {
+		if ($status === null) $status = (is_int($code) && $code >= 400 && $code <= 599) ? $code : 500;
 		if ($data instanceof \Throwable) {
 			$this->LogException($data);
 			$data = null;
@@ -90,17 +89,17 @@ class LoggerApi extends MagratheaApi {
 		return parent::ReturnError($code, $message, $data, $status);
 	}
 
-	// The vendor's path for exceptions with code 0 (e.g. MagratheaDBException): HTTP 200 with the
-	// exception object as `data`. Send it through ReturnError instead.
+	// The vendor's path for exceptions with code 0: it sends their message as is, and a DB error's
+	// message can quote the SQL. Send them through ReturnError instead.
 	public function ReturnFail($data) {
-		if ($data instanceof \Magrathea2\Exceptions\MagratheaApiException) return $this->ReturnApiException($data);
+		if ($data instanceof \Magrathea\Exceptions\MagratheaApiException) return $this->ReturnApiException($data);
 		return $this->ReturnError(500, "Internal server error", $data instanceof \Throwable ? $data : null, 500);
 	}
 
 	// Best effort: an unwritable logs_path must not turn the JSON error into an HTML page
 	private function LogException(\Throwable $ex): void {
 		try {
-			\Magrathea2\Logger::Instance()->LogError($ex);
+			\Magrathea\Logger::Instance()->LogError($ex);
 		} catch (\Throwable $ignored) {}
 	}
 }

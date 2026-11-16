@@ -2,8 +2,8 @@
 namespace logger;
 
 use logger\Log\LogControl;
-use Magrathea2\Exceptions\MagratheaApiException;
-use Magrathea2\MagratheaApiControl;
+use Magrathea\Exceptions\MagratheaApiException;
+use Magrathea\MagratheaApiControl;
 
 /** The service-facing routes: write to and read back the caller's own logs/errors. */
 class LogApi extends MagratheaApiControl {

@@ -8,9 +8,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git unzip \
 
 RUN a2enmod rewrite headers
 
-# Magrathea writes its own logs/cache; the bind-mounted repo isn't writable by www-data,
+# Magrathea writes its own logs/cache/backups; the bind-mounted repo isn't writable by www-data,
 # so the [dev] section of magrathea.conf points at these container-local folders instead.
-RUN mkdir -p /var/lib/logger/logs /var/lib/logger/cache && chown -R www-data:www-data /var/lib/logger
+RUN mkdir -p /var/lib/logger/logs /var/lib/logger/cache /var/lib/logger/backups && chown -R www-data:www-data /var/lib/logger
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 

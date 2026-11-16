@@ -5,6 +5,7 @@ src/vendor/
 src/configs/magrathea.conf
 logs/
 cache/
+backups/
 site.caddy
 
 last_deploy.md

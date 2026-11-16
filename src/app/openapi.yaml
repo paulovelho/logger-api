@@ -33,7 +33,7 @@ info:
 
     A negative age counts as 0, and `occurredAt` is never later than the arrival time.
     `from`, `to` and the newest-first order use `occurredAt`; `lastLog` and purges use `timestamp`.
-  version: 1.2.3
+  version: 1.3.0
 servers:
   - url: /
     description: This instance

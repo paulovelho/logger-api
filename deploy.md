@@ -1,6 +1,6 @@
 # Deploying a Logger instance
 
-The logger is a plain PHP app (MagratheaPHP2) backed by two MariaDB/MySQL tables, `logger_logs`
+The logger is a plain PHP app (MagratheaPHP 3) backed by two MariaDB/MySQL tables, `logger_logs`
 and `logger_errors`. It can run as **several independent instances** (one per use): each instance
 has its own checkout, its own database, its own `magrathea.conf` and `config.json`, and its own
 vhost. Nothing in the code is tied to a host name or a path.
@@ -62,10 +62,13 @@ mysql -u root -p -e "CREATE USER IF NOT EXISTS '<db-user>'@'localhost' IDENTIFIE
 - ⚠️ `schema.sql` starts with `DROP TABLE IF EXISTS`: running it again **wipes every log and error**.
   Use it for a fresh instance or a deliberate reset only; to keep the data, use the migrations below.
   Table-level grants survive the drop (MariaDB keeps them by name), so no need to re-`GRANT`.
-- **Upgrading an existing instance** (tables created before 1.2.2): run each script in
-  `database/migrations/` newer than the version it ran, as a user with `ALTER` (e.g. root):
-  `mysql -u root -p <database> < database/migrations/1.2.2-occurred-at.sql`. The scripts are
-  safe to re-run. Run them right after `git pull`, before traffic hits the new code.
+- **Upgrading an existing instance** (tables created before 1.3.0): run each script in
+  `database/migrations/` newer than the version it ran, in order, as a user with `ALTER` (e.g. root):
+  `1.2.2-occurred-at.sql`, then `1.3.0-timestamps.sql`
+  (`mysql -u root -p <database> < database/migrations/<script>`). The scripts are safe to re-run.
+  Run them right after `git pull`, before traffic hits the new code. `1.3.0-timestamps.sql` can also
+  run before the pull, since the 1.2.x code ignores its columns. On a large table, an `ALTER` can
+  block writes while it runs.
 - `DELETE` is needed by the purge routes (`DELETE /admin/logs|errors`). `DROP` is only needed by
   `./scripts/erase.sh`, which runs `TRUNCATE`.
 

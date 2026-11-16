@@ -51,7 +51,7 @@ class WriteTest extends LoggerTestCase {
 		// an empty body is stored as {} (not tagged, so remove it by id)
 		[ $status, $json ] = self::Http("POST", "/log", "");
 		$this->assertSame(200, $status);
-		$db = \Magrathea2\DB\Database::Instance();
+		$db = \Magrathea\DB\Database::Instance();
 		$this->assertSame("{}", $db->QueryOne("SELECT `data` FROM `logger_logs` WHERE `id` = ".(int)$json["data"]["id"]));
 		$db->Query("DELETE FROM `logger_logs` WHERE `id` = ".(int)$json["data"]["id"]);
 	}

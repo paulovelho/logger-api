@@ -2,8 +2,8 @@
 
 namespace logger;
 
-use Magrathea2\Exceptions\MagratheaApiException;
-use Magrathea2\MagratheaPHP;
+use Magrathea\Exceptions\MagratheaApiException;
+use Magrathea\MagratheaPHP;
 
 /**
  * Services allowed to log, read from config.json at the module root (outside the docroot).

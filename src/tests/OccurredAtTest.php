@@ -2,7 +2,7 @@
 namespace logger\Tests;
 
 use logger\Log\LogControl;
-use Magrathea2\Exceptions\MagratheaApiException;
+use Magrathea\Exceptions\MagratheaApiException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

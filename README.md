@@ -2,7 +2,7 @@
 
 Flexible logging API with JWT authentication. Each service authenticates, writes arbitrary JSON
 logs and errors, and can only read back its own. An admin credential reads and purges everything.
-PHP (MagratheaPHP2) + MariaDB. Several instances can run side by side, each with its own database and config.
+PHP (MagratheaPHP 3) + MariaDB. Several instances can run side by side, each with its own database and config.
 
 Deploying an instance: see [deploy.md](deploy.md). Release notes: [changelog.md](changelog.md).
 

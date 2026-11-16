@@ -2,7 +2,7 @@
 namespace logger\Tests;
 
 use logger\Log\LogControl;
-use Magrathea2\DB\Database;
+use Magrathea\DB\Database;
 use PHPUnit\Framework\TestCase;
 
 /**

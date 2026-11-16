@@ -2,7 +2,7 @@
 namespace logger\Tests;
 
 use logger\Log\LogControl;
-use Magrathea2\Exceptions\MagratheaApiException;
+use Magrathea\Exceptions\MagratheaDBException;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /** POST /log/batch and /error/batch: validation (nothing stored on 4xx), all-or-nothing inserts. */
@@ -132,10 +132,8 @@ class BatchTest extends LoggerTestCase {
 		try {
 			LogControl::InsertRows(LogControl::LOGS, [ $good(), $good(), $row("{not json"), $good() ]);
 			$this->fail("the insert should have failed");
-		} catch (MagratheaApiException $ex) {
-			$this->assertSame(500, $ex->getCode());
-		} catch (\Throwable $ex) {
-			// a mysqli/Magrathea DB exception: LoggerApi answers it with a generic 500
+		} catch (MagratheaDBException $ex) {
+			// LoggerApi answers it with a generic 500
 		}
 		$this->assertCount(0, self::Rows(LogControl::LOGS, "rollback"));
 

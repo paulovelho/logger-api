@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f6d7dd071caddfdae4f55d4e2db1d296",
+    "content-hash": "a8d62ce7036bd893847f44abba42b4d3",
     "packages": [
         {
             "name": "components/jquery",
@@ -211,27 +211,31 @@
             "time": "2025-10-15T16:49:08+00:00"
         },
         {
-            "name": "platypustechnology/magratheaphp2",
-            "version": "v2.3.3",
+            "name": "platypustechnology/magratheaphp",
+            "version": "v3.0.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/PlatypusTechnology/MagratheaPHP2.git",
-                "reference": "90f836efb3ecc994c6e29ba2389ed8b76ec6ad20"
+                "url": "https://github.com/PlatypusTechnology/MagratheaPHP3.git",
+                "reference": "64fc8104db0d6826c55a9d49c9f6e7e0a3da6427"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/PlatypusTechnology/MagratheaPHP2/zipball/90f836efb3ecc994c6e29ba2389ed8b76ec6ad20",
-                "reference": "90f836efb3ecc994c6e29ba2389ed8b76ec6ad20",
+                "url": "https://api.github.com/repos/PlatypusTechnology/MagratheaPHP3/zipball/64fc8104db0d6826c55a9d49c9f6e7e0a3da6427",
+                "reference": "64fc8104db0d6826c55a9d49c9f6e7e0a3da6427",
                 "shasum": ""
             },
             "require": {
                 "components/jquery": "^3.6",
                 "firebase/php-jwt": "^6.10||^7.0",
+                "php": ">=8.1",
                 "phpmailer/phpmailer": "^6.9.1",
                 "scssphp/scssphp": "^1.12.0",
                 "tedivm/jshrink": "~1.0",
                 "twbs/bootstrap": "5.2.3"
             },
+            "bin": [
+                "bin/magrathea"
+            ],
             "type": "library",
             "autoload": {
                 "files": [
@@ -240,7 +244,7 @@
                     "src/_FunctionsDebug.php"
                 ],
                 "psr-4": {
-                    "Magrathea2\\": "src/"
+                    "Magrathea\\": "src/"
                 }
             },
             "notification-url": "https://packagist.org/downloads/",
@@ -252,13 +256,13 @@
                     "name": "Platypus Technology"
                 }
             ],
-            "description": "Magrathea PHP 2",
-            "homepage": "https://www.platypusweb.com.br/magratheaphp2/docs/",
+            "description": "Magrathea PHP",
+            "homepage": "https://www.platypusweb.com.br/magratheaphp3/docs/",
             "support": {
-                "issues": "https://github.com/PlatypusTechnology/MagratheaPHP2/issues",
-                "source": "https://github.com/PlatypusTechnology/MagratheaPHP2/tree/v2.3.3"
+                "issues": "https://github.com/PlatypusTechnology/MagratheaPHP3/issues",
+                "source": "https://github.com/PlatypusTechnology/MagratheaPHP3/tree/v3.0.0"
             },
-            "time": "2026-09-04T11:40:20+00:00"
+            "time": "2026-11-16T01:38:22+00:00"
         },
         {
             "name": "scssphp/scssphp",

@@ -2,7 +2,8 @@
 -- `timestamp` is when the server received the entry (filled by the logger, in magrathea.conf's `timezone`); `occurred_at` is when
 -- the event happened (client time, skew-corrected; = `timestamp` when the client sends none).
 -- `data` is whatever JSON the service posted, minus the reserved keys (environment, occurredAt, sentAt).
--- Databases created before 1.2.2: run migrations/1.2.2-occurred-at.sql instead to keep the data.
+-- `created_at` / `updated_at`: MagratheaPHP 3's bookkeeping, filled by the database, never read or returned by the API.
+-- Existing databases: run the scripts in migrations/ (1.2.2-occurred-at.sql, 1.3.0-timestamps.sql) instead to keep the data.
 
 DROP TABLE IF EXISTS logger_logs;
 CREATE TABLE IF NOT EXISTS logger_logs (
@@ -12,6 +13,8 @@ CREATE TABLE IF NOT EXISTS logger_logs (
   data        JSON         NOT NULL,
   timestamp   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   occurred_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_service_timestamp (service, timestamp),
   INDEX idx_service_occurred_at (service, occurred_at)
 ) ENGINE=InnoDB;
@@ -24,6 +27,8 @@ CREATE TABLE IF NOT EXISTS logger_errors (
   data        JSON         NOT NULL,
   timestamp   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   occurred_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_service_timestamp (service, timestamp),
   INDEX idx_service_occurred_at (service, occurred_at)
 ) ENGINE=InnoDB;

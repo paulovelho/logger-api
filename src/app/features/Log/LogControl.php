@@ -1,15 +1,13 @@
 <?php
 namespace logger\Log;
 
-use logger\ErrorLog\ErrorLog;
 use logger\ServiceUsers;
-use Magrathea2\DB\Database;
-use Magrathea2\Exceptions\MagratheaApiException;
+use Magrathea\DB\Database;
+use Magrathea\Exceptions\MagratheaApiException;
 
 /**
  * Reads, writes and purges for both tables (`logger_logs`, `logger_errors`: same columns).
- * Every input is validated and re-formatted here before it reaches SQL: Query::Clean is
- * too weak to rely on, and PrepareAndExecute() can't return rows.
+ * Every input is validated and re-formatted here before it reaches SQL.
  * Dates are stored in Magrathea's timezone (`timezone` in magrathea.conf) and come from PHP's
  * clock, never the DB's; the API reads and returns them in UTC.
  */
@@ -200,8 +198,7 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 
 	/**
 	 * Inserts rows (Row() shape) with one multi-row INSERT, so either all of them are stored or none.
-	 * PrepareAndExecute() swallows some statement errors (returns null) and echoes "got error!" while
-	 * doing it; the echo is discarded so it can't corrupt the JSON response.
+	 * A failure throws MagratheaDBException, which the API logs and answers with a generic 500.
 	 * @return int the first row's id
 	 */
 	public static function InsertRows(string $table, array $rows): int {
@@ -214,16 +211,8 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 		foreach ($rows as $row) {
 			foreach ($columns as $column) $values[] = $row[$column];
 		}
-		ob_start();
-		try {
-			$id = Database::Instance()->PrepareAndExecute($sql, array_fill(0, count($values), "string"), $values);
-		} finally {
-			ob_end_clean();
-		}
-		if (!is_int($id) || $id <= 0) {
-			throw new MagratheaApiException($table === self::ERRORS ? "Failed to save error" : "Failed to save log", 500);
-		}
-		return $id;
+		$id = Database::Instance()->PrepareAndExecute($sql, array_fill(0, count($values), "string"), $values);
+		return (int)$id;
 	}
 
 	/** `Y-m-d H:i:s.v` in Magrathea's timezone, for the DATETIME(3) columns. */
@@ -330,9 +319,9 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 	}
 
 	/**
-	 * Deletes `service`'s rows older than `days` days, then writes a self-audit row into
-	 * `logger_logs` under SELF_SERVICE. PrepareAndExecute() doesn't expose affected rows, so the
-	 * rows are counted first, against a cutoff computed once so both queries see the same instant.
+	 * Deletes `service`'s rows older than `days` days (one cutoff, from the same clock as `timestamp`),
+	 * then writes a self-audit row into `logger_logs` under SELF_SERVICE. The count is the DELETE's
+	 * own affected rows, read before the audit write replaces it.
 	 * @return array{deleted:int}
 	 */
 	public static function Purge(string $table, string $service, int $days, string $performedBy): array {
@@ -340,11 +329,8 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 		if (!self::ValidService($service)) throw new MagratheaApiException("Invalid 'service'", 400);
 		$db = Database::Instance();
 		$cutoff = self::Sql(self::ReceivedAt()->modify("-".$days." days"));
-		$whereSql = " WHERE `service` = '".$service."' AND `timestamp` < '".$cutoff."'";
-		$deleted = (int)$db->QueryOne("SELECT COUNT(*) FROM `".$table."`".$whereSql);
-		if ($deleted > 0 && $db->Query("DELETE FROM `".$table."`".$whereSql) === false) {
-			throw new MagratheaApiException("Failed to purge", 500);
-		}
+		$db->Query("DELETE FROM `".$table."` WHERE `service` = '".$service."' AND `timestamp` < '".$cutoff."'");
+		$deleted = $db->LastAffectedRows();
 		self::Write(self::LOGS, self::SELF_SERVICE, (object)[
 			"environment" => "unknown",
 			"action" => $table === self::ERRORS ? "purge_errors" : "purge_logs",

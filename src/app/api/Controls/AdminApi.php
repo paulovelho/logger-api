@@ -2,8 +2,8 @@
 namespace logger;
 
 use logger\Log\LogControl;
-use Magrathea2\Exceptions\MagratheaApiException;
-use Magrathea2\MagratheaApiControl;
+use Magrathea\Exceptions\MagratheaApiException;
+use Magrathea\MagratheaApiControl;
 
 /**
  * /admin/* routes, for the admin dashboard (admin.html) and the guia.lol admin app.

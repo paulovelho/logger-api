@@ -1,5 +1,4 @@
 <?php
-// Loads the app (Magrathea config, autoloaders) the same way index.php does; LoggerApi starts the DB.
+// Loads the app (Magrathea config, autoloaders, DB credentials) the same way index.php does.
 require __DIR__."/../app/_inc.php";
-Magrathea2\MagratheaPHP::Instance()->StartDb();
 require __DIR__."/LoggerTestCase.php";

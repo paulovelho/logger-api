@@ -1,3 +1,17 @@
+### 1.3.0
+2026-11
+	- **change:** runs on MagratheaPHP 3.0 (was MagratheaPHP2 2.3.3). No API change: same routes, fields, statuses and envelope, and database failures still answer a generic 500
+	- **change:** a write that fails in the database answers `Internal server error` (was `Failed to save log` / `Failed to save error`); the status is still 500
+	- **change:** CORS responses send `Vary: Origin`
+	- **fix:** a failed bootstrap (missing config, unreachable vendor) printed the exception, with paths and config details, into the response; it's now logged and answered with the envelope's generic 500. A PHP error inside a route is answered the same way
+	- **fix:** purges report the rows the `DELETE` removed (they were counted by a `SELECT` just before it)
+	- **migration:** run `database/migrations/1.3.0-timestamps.sql` once per instance. It adds `created_at` and `updated_at` to both tables: framework bookkeeping, filled by the database and never returned by the API (existing rows get the migration's time). Needs `ALTER`, so run it as a privileged user; it rebuilds both tables, which can block writes on large ones. It works with 1.2.3, so it can run before the deploy
+	- **config:** in each `magrathea.conf`, delete `time_zone` from `[general]` (it was never read; `timezone` in each section is the real key) and add `backups_path`, a writable folder outside the docroot
+	- **removed:** `setup.php` (MagratheaPHP2's setup wizard entry, already disabled)
+	- **admin:** the vendor admin (`magrathea.php`) has a new Database section (explorer, queries, query editor, dumps, checks); dumps go to `backups_path`. Every admin has to log in again after the deploy, and inactive admin users can no longer log in
+	- **dev:** `scripts/reboot.sh` waits until `/health-check` reports `"database":"ok"`, not only for a 200, so `./scripts/test.sh` right after it no longer fails while MariaDB starts
+	- **dev:** `PurgeTest`; `vendor/bin/magrathea check` and `models:verify` check the config, folders, timezone and both tables
+
 ### 1.2.3
 2026-10
 	- **fix:** `timestamp`, `occurredAt` and `lastLog` were off by the database server's UTC offset when its clock wasn't UTC (and so were `from`/`to` filters and purge cutoffs): the arrival time and the purge cutoff were read from the database's `NOW()`, then labelled UTC. Both now come from PHP's clock, so the database's timezone no longer matters

@@ -3,8 +3,8 @@ namespace logger;
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Magrathea2\Exceptions\MagratheaApiException;
-use Magrathea2\MagratheaApiAuth;
+use Magrathea\Exceptions\MagratheaApiException;
+use Magrathea\MagratheaApiAuth;
 
 /**
  * Service authentication. Tokens are HS256 `{service, readonly, iat}` with no `exp`, exactly what
