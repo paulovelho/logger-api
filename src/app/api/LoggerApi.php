@@ -73,8 +73,10 @@ class LoggerApi extends MagratheaApi {
 		$this->Add("GET", "admin/logs", $api, "Logs", self::ADMIN, "All logs (service, from, to, limit, skip)");
 		$this->Add("GET", "admin/errors", $api, "Errors", self::ADMIN, "All errors (service, from, to, limit, skip)");
 		$this->Add("GET", "admin/services", $api, "Services", self::ADMIN, "Active services with log count + last activity");
-		$this->Add("DELETE", "admin/logs", $api, "PurgeLogs", self::ADMIN, "Delete a service's logs older than olderThanDays (default 365)");
-		$this->Add("DELETE", "admin/errors", $api, "PurgeErrors", self::ADMIN, "Delete a service's errors older than olderThanDays (default 365)");
+		$this->Add("GET", "admin/logs/purge", $api, "PurgeLogsPreview", self::ADMIN, "Count the logs DELETE admin/logs?occurredBefore= would delete");
+		$this->Add("GET", "admin/errors/purge", $api, "PurgeErrorsPreview", self::ADMIN, "Count the errors DELETE admin/errors?occurredBefore= would delete");
+		$this->Add("DELETE", "admin/logs", $api, "PurgeLogs", self::ADMIN, "Delete a service's logs older than olderThanDays (default 365) or that occurred before occurredBefore");
+		$this->Add("DELETE", "admin/errors", $api, "PurgeErrors", self::ADMIN, "Delete a service's errors older than olderThanDays (default 365) or that occurred before occurredBefore");
 	}
 
 	// The status is the error code when it is an HTTP status (400–599), 500 otherwise. Exceptions

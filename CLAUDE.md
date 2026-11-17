@@ -31,11 +31,11 @@ src/
     api/LoggerApi.php          Routes (extends MagratheaApi), CORS, /health-check, /version
     api/Authentication/LoggerAuth.php   Login, Token, IsService / IsActive / IsAdmin, raw-secret jwtEncode/jwtDecode
     api/Controls/LogApi.php    POST /log, POST /error, POST /log|error/batch, GET /report, GET /errors
-    api/Controls/AdminApi.php  GET /admin/logs|errors|services, DELETE /admin/logs|errors (purge)
+    api/Controls/AdminApi.php  GET /admin/logs|errors|services, DELETE /admin/logs|errors (purge), GET /admin/logs|errors/purge (preview)
     features/Log/              Log model (logger_logs; the Base/ split is kept from 2.x's generator) + LogControl (writes, batch, skew, validated reads, purge — both tables)
     features/ErrorLog/         ErrorLog model (logger_errors)
     shared/ServiceUsers.php    Reads ../../config.json
-    admin.html|js|css          Dashboard (Node's UI, reads the envelope); docs.html + openapi.yaml for /docs
+    admin.html|js|css          Dashboard (Node's UI, reads the envelope; `cleaner` tab = preview + purge by event time); docs.html + openapi.yaml for /docs
 docker/                        Local-only Dockerfile + Apache vhost
 docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
 ```
@@ -77,7 +77,7 @@ docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
   the single and batch routes — `receivedAt - (sentAt - occurredAt)` when both are sent (negative age → 0),
   `occurredAt` as given when alone, `receivedAt` otherwise; never later than `receivedAt`. Client dates
   are strict ISO-8601 (`ClientDate`), unlike `from`/`to`. Reads filter/sort on `occurred_at`;
-  `lastLog` and purges stay on `timestamp`.
+  `lastLog` and `olderThanDays` purges stay on `timestamp`.
 - **Batch** (`/log/batch`, `/error/batch`): `MAX_BATCH_ENTRIES` 100, `MAX_BATCH_BYTES` 256 KB (413).
   `environment`/`sentAt` are batch-level (400 if inside an entry); everything is validated before the
   insert, and 400 messages name the first bad index (`entries[3]: …`). Response `{count}`, no ids.
@@ -91,6 +91,14 @@ docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
 - **Read queries validate every input** (service regex, dates via `DateTimeImmutable`, limit 1–1000, skip ≥ 0) before building SQL.
 - **Purge** writes an audit row into `logger_logs` under the reserved `service: 'logger'`
   (listed as `Logger (self)` in `/admin/services`).
+- **Purge has two modes** (one service at a time; `service` is always required): `olderThanDays` on
+  `timestamp` (default 365; the retention scripts and the Angular admin use it, audit `cutoffDays`) or
+  `occurredBefore` on `occurred_at` (the dashboard's `cleaner` tab; audit `occurredBefore` + `maxId`);
+  both together is a 400, and a future `occurredBefore` is a 400. `LogControl::PurgeWhere()` is the only
+  place the WHERE is built, shared by the DELETE and its preview (`GET /admin/logs|errors/purge` →
+  `{count, occurredBefore, maxId}`), so the count can't drift from what gets deleted. The DELETE's
+  `maxId` (`id <= maxId`, date mode only) spares rows stored after the preview (a late-synced batch
+  with an old `occurredAt`), so it never deletes more than the preview showed.
 - **Caching:** every API response is `no-store` (`DisableCache()` in `LoggerApi::Initialize`); the static
   pages are `no-cache` (`.htaccess` FilesMatch / Caddy `@static`), so they revalidate by ETag.
 - **No basic auth on `/admin*`** — the admin API is Bearer + readonly, and the admin app calls it
@@ -122,8 +130,10 @@ docker-compose.yml             Local-only: logger_php + logger_db (mariadb)
 | GET    | /admin/logs     | Bearer, readonly | All logs (+ `service` filter) |
 | GET    | /admin/errors   | Bearer, readonly | All errors (+ `service` filter) |
 | GET    | /admin/services | Bearer, readonly | Active services + `Logger (self)`, count + lastLog |
-| DELETE | /admin/logs     | Bearer, readonly | Purge (`service` required, `olderThanDays` default 365) |
+| DELETE | /admin/logs     | Bearer, readonly | Purge (`service` required; `olderThanDays` default 365, or `occurredBefore` [+ `maxId`]) |
 | DELETE | /admin/errors   | Bearer, readonly | Same, on errors |
+| GET    | /admin/logs/purge   | Bearer, readonly | Preview an `occurredBefore` purge → `{count, occurredBefore, maxId}` |
+| GET    | /admin/errors/purge | Bearer, readonly | Same, on errors |
 | GET    | /health-check   | No            | `{health, time, database}` (vendor `HealthCheck(true)`) |
 | GET    | /version        | No            | `{version}` from `src/version`, else `version` |
 | GET    | /admin          | No (login form) | Admin dashboard |

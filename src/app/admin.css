@@ -298,6 +298,32 @@ tbody tr:hover { background: #1a1d22; }
 
 .error { color: #f7768e; }
 
+/* ── Cleaner tab ───────────────────────────────────────────────────────────── */
+
+.danger { border-color: #f7768e; color: #f7768e; }
+.danger:hover { background: #2e1f25; }
+
+.cleaner-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.cleaner-panel > p { margin: 0; }
+.cleaner-panel > :empty { display: none; }
+.cleaner-panel :disabled { opacity: 0.4; cursor: default; }
+
+.cleaner-confirm {
+  border: 1px solid #353a44;
+  border-radius: 6px;
+  padding: 1rem;
+  max-width: 40rem;
+  font-size: 0.85rem;
+}
+
+.cleaner-confirm p { margin: 0 0 0.75rem; }
+
 /* ── Tokens / docs tabs (no inline styles: the CSP doesn't allow them) ───────── */
 
 .token-box {

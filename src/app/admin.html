@@ -38,6 +38,7 @@
       <button class="tab active" data-tab="logs">logs</button>
       <button class="tab" data-tab="errors">errors</button>
       <button class="tab" data-tab="services">services</button>
+      <button class="tab" data-tab="cleaner">cleaner</button>
       <button class="tab" data-tab="tokens">tokens</button>
       <button class="tab" data-tab="docs">docs</button>
     </nav>
@@ -141,6 +142,34 @@
     <div id="tab-services" class="tab-panel" hidden>
       <div class="summary" id="services-summary"></div>
       <div id="services-grid"></div>
+    </div>
+
+    <div id="tab-cleaner" class="tab-panel cleaner-panel" hidden>
+      <div class="summary">service: <span id="cleaner-service"></span></div>
+      <p id="cleaner-pick" class="summary">Pick a service in the top bar. The cleaner works on one service at a time.</p>
+      <div class="filters">
+        <label>table
+          <select id="cleaner-table">
+            <option value="logs">logs</option>
+            <option value="errors">errors</option>
+          </select>
+        </label>
+        <label>occurred before
+          <input type="date" id="cleaner-date" />
+        </label>
+        <div class="filter-actions">
+          <button id="cleaner-check">check</button>
+        </div>
+      </div>
+      <div class="summary" id="cleaner-result"></div>
+      <div id="cleaner-confirm" class="cleaner-confirm" hidden>
+        <p id="cleaner-message"></p>
+        <p>This can't be undone.</p>
+        <div class="filter-actions">
+          <button id="cleaner-delete" class="danger"></button>
+          <button id="cleaner-cancel">cancel</button>
+        </div>
+      </div>
     </div>
 
     <div id="tab-tokens" class="tab-panel" hidden>

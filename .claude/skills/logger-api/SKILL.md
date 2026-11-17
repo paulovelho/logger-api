@@ -161,16 +161,28 @@ curl -X POST https://logger.guia.lol/log/batch \
 | GET | `/admin/errors` | `{total, count, errors}`. Same as above |
 | GET | `/admin/services` | `{services: [{service, name, count, lastLog}]}` |
 | DELETE | `/admin/logs?service=x&olderThanDays=30` | `{deleted}` |
-| DELETE | `/admin/errors?service=x&olderThanDays=30` | `{deleted}` |
+| DELETE | `/admin/logs?service=x&occurredBefore=2026-11-01T03:00:00Z&maxId=98213` | `{deleted}` |
+| GET | `/admin/logs/purge?service=x&occurredBefore=2026-11-01T03:00:00Z` | `{count, occurredBefore, maxId}` (preview) |
+| DELETE / GET | `/admin/errors…` | Same as the three above, on errors |
 
 - `/admin/services` lists every active configured service, including those with 0 logs, plus the
   synthetic `{service: "logger", name: "Logger (self)"}`. Counts come from `logger_logs` only.
   `lastLog` is the latest arrival `timestamp`.
   Sorted by `lastLog`, newest first, with `null` last.
-- **Purge**: `service` is required. `olderThanDays` must be a positive whole number (default 365),
-  counted on the arrival `timestamp`.
-  Each purge writes an audit row into `logger_logs` under `service: "logger"`:
-  `{action: "purge_logs"|"purge_errors", targetService, cutoffDays, deletedCount, performedBy}`.
+- **Purge**: `service` is required (one service at a time). Two modes, never both (400):
+  - `olderThanDays`: a positive whole number (default 365, also when neither is sent), counted on
+    the arrival `timestamp`.
+  - `occurredBefore`: strict ISO-8601 (like `occurredAt`; UTC unless it has an offset), on the event
+    time `occurredAt`. A future date is a 400. Optional `maxId` (positive whole number, only in this
+    mode): only entries with `_id <= maxId` are deleted.
+- **Preview** (`GET /admin/logs/purge`, `/admin/errors/purge`, `service` + `occurredBefore` required):
+  what the `occurredBefore` DELETE would remove right now, with the same filter. `occurredBefore` comes
+  back normalised to UTC (ms); `maxId` is the highest matching `_id` (`null` when `count` is 0).
+  Send both back with the DELETE: entries stored after the preview (a late-synced batch with an old
+  `occurredAt`) are kept, so it never deletes more than `count`. `deleted` is the real number.
+- Each purge writes an audit row into `logger_logs` under `service: "logger"`:
+  `{action: "purge_logs"|"purge_errors", targetService, cutoffDays, deletedCount, performedBy}`, or
+  with `occurredBefore, maxId` in place of `cutoffDays` for the event-time mode.
 
 ## System (no auth)
 

@@ -106,6 +106,7 @@ function setService(value) {
   $('service-filter').classList.toggle('active', service !== '');
   for (const p of Object.values(panels)) p.skip = 0;
   document.querySelectorAll('.service-card').forEach((c) => c.classList.toggle('selected', c.dataset.service === service));
+  resetCleaner();
 }
 
 // The selected service stays listed even when /admin/services doesn't return it (inactive, or not loaded yet)
@@ -121,6 +122,7 @@ function renderServiceOptions(services) {
     sel.appendChild(opt);
   }
   sel.value = service;
+  syncCleaner();
 }
 
 $('service').addEventListener('change', () => {
@@ -138,6 +140,7 @@ function showTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach((p) => p.hidden = p.id !== 'tab-' + tab);
   if (tab === 'services') loadServices();
+  if (tab === 'cleaner') syncCleaner();
   if (panels[tab]) loadPanel(tab);
 }
 
@@ -283,13 +286,112 @@ async function loadServices() {
   }
 }
 
+// ── Cleaner ───────────────────────────────────────────────────────────────────
+
+// Deletes one service's logs or errors that occurred before a date, in two steps: "check" asks
+// GET /admin/<table>/purge how many would go, "delete" sends the DELETE with the preview's
+// occurredBefore and maxId (rows stored after the preview are spared, so it never deletes more
+// than it showed). Changing the service, table or date drops the preview: a confirmation can't act
+// on settings it didn't show. seq: bumped on every reset, so a slower check can't show a stale count.
+const cleaner = { preview: null, seq: 0, busy: false };
+
+function serviceLabel(id) {
+  const opt = [...$('service').options].find((o) => o.value === id);
+  return opt ? opt.textContent : id;
+}
+
+// "1 log", "1,234 errors"
+function entriesLabel(n, table) {
+  return `${n.toLocaleString()} ${n === 1 ? table.slice(0, -1) : table}`;
+}
+
+// Controls follow the top-bar service; the date can't be after today
+function syncCleaner() {
+  const none = service === '';
+  $('cleaner-service').textContent = none ? '—' : serviceLabel(service);
+  $('cleaner-pick').hidden = !none;
+  $('cleaner-table').disabled = none || cleaner.busy;
+  $('cleaner-date').disabled = none || cleaner.busy;
+  $('cleaner-check').disabled = none || cleaner.busy || !$('cleaner-date').value;
+  $('cleaner-date').max = toLocalInput(new Date()).slice(0, 10);
+}
+
+function resetCleaner() {
+  cleaner.preview = null;
+  cleaner.seq++;
+  $('cleaner-confirm').hidden = true;
+  $('cleaner-result').replaceChildren();
+  syncCleaner();
+}
+
+$('cleaner-table').addEventListener('change', resetCleaner);
+$('cleaner-date').addEventListener('input', resetCleaner);
+$('cleaner-cancel').addEventListener('click', resetCleaner);
+
+// The cutoff is the start of the chosen day in the browser's timezone: "before 1 Nov" keeps 1 Nov
+$('cleaner-check').addEventListener('click', async () => {
+  const table = $('cleaner-table').value;
+  const target = service;
+  const day = new Date($('cleaner-date').value + 'T00:00');
+  if (!target || isNaN(day)) return;
+  resetCleaner();
+  const seq = cleaner.seq;
+  const params = new URLSearchParams({ service: target, occurredBefore: day.toISOString() });
+  try {
+    const res = await authedFetch('/admin/' + table + '/purge?' + params);
+    if (!res) return;
+    const data = await unwrap(res);
+    if (seq !== cleaner.seq) return;
+    const scope = `from ${serviceLabel(target)} that occurred before ${day.toLocaleDateString()}`;
+    if (data.count === 0) {
+      $('cleaner-result').textContent = `Nothing to delete: no ${table} ${scope}.`;
+      return;
+    }
+    cleaner.preview = { table, service: target, occurredBefore: data.occurredBefore, maxId: data.maxId };
+    $('cleaner-message').textContent = `${entriesLabel(data.count, table)} ${scope} will be deleted.`;
+    $('cleaner-delete').textContent = `delete ${entriesLabel(data.count, table)}`;
+    $('cleaner-confirm').hidden = false;
+  } catch (err) {
+    if (seq !== cleaner.seq) return;
+    showFailure($('cleaner-result'), err, 'Check failed');
+  }
+});
+
+// Disabled while the request runs, so a double click can't send it twice
+$('cleaner-delete').addEventListener('click', async () => {
+  const p = cleaner.preview;
+  if (!p || cleaner.busy) return;
+  cleaner.busy = true;
+  $('cleaner-delete').disabled = true;
+  $('cleaner-cancel').disabled = true;
+  syncCleaner();
+  const params = new URLSearchParams({ service: p.service, occurredBefore: p.occurredBefore, maxId: p.maxId });
+  try {
+    const res = await authedFetch('/admin/' + p.table + '?' + params, { method: 'DELETE' });
+    if (!res) return;
+    const { deleted } = await unwrap(res);
+    resetCleaner();
+    $('cleaner-result').textContent = `Deleted ${entriesLabel(deleted, p.table)} from ${serviceLabel(p.service)}.`;
+    loadServices();
+  } catch (err) {
+    // the preview may be stale now: a new check is needed
+    resetCleaner();
+    showFailure($('cleaner-result'), err, 'Delete failed');
+  } finally {
+    cleaner.busy = false;
+    $('cleaner-delete').disabled = false;
+    $('cleaner-cancel').disabled = false;
+    syncCleaner();
+  }
+});
+
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 // The message can come from the server: text, never HTML
-function showFailure(el, err) {
+function showFailure(el, err, prefix = 'Failed to load') {
   const span = document.createElement('span');
   span.className = 'error';
-  span.textContent = 'Failed to load: ' + err.message;
+  span.textContent = prefix + ': ' + err.message;
   el.replaceChildren(span);
 }
 

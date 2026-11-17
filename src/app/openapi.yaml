@@ -364,19 +364,54 @@ paths:
       tags: [Admin]
       summary: Purge one service's logs
       description: |
-        Deletes the `service`'s logs received (`timestamp`) more than `olderThanDays` days ago
-        (default 365), then writes an
-        audit entry into `logger_logs` under the reserved `service: "logger"`
-        (`{action: "purge_logs", targetService, cutoffDays, deletedCount, performedBy}`).
+        Deletes the `service`'s logs in one of two modes, then writes an audit entry into
+        `logger_logs` under the reserved `service: "logger"`:
+        - by arrival: received (`timestamp`) more than `olderThanDays` days ago (default 365, also
+          when neither parameter is sent). Audit: `{action: "purge_logs", targetService, cutoffDays, deletedCount, performedBy}`.
+        - by event time: occurred (`occurredAt`) before `occurredBefore`, optionally only up to
+          `maxId`. Audit: `{action: "purge_logs", targetService, occurredBefore, maxId, deletedCount, performedBy}`.
+
+        Sending both `olderThanDays` and `occurredBefore` is a 400. `GET /admin/logs/purge` previews
+        the second mode.
       operationId: adminPurgeLogs
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/purgeService'
         - $ref: '#/components/parameters/olderThanDays'
+        - $ref: '#/components/parameters/occurredBefore'
+        - $ref: '#/components/parameters/maxId'
       responses:
         '200':
           $ref: '#/components/responses/Purged'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/logs/purge:
+    get:
+      tags: [Admin]
+      summary: Preview a purge of one service's logs by event time
+      description: |
+        How many of the `service`'s logs `DELETE /admin/logs?occurredBefore=` would delete right now.
+        It uses the same filter as the DELETE, so the count matches it. Send the returned
+        `occurredBefore` and `maxId` with the DELETE: logs stored after the preview (e.g. a
+        late-synced offline batch with an old `occurredAt`) are then kept, so it never deletes more
+        than `count`. It deletes fewer if some are gone in between (another purge); its `deleted`
+        is the real number.
+      operationId: adminPurgeLogsPreview
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/purgeService'
+        - $ref: '#/components/parameters/previewOccurredBefore'
+      responses:
+        '200':
+          $ref: '#/components/responses/PurgePreview'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -422,9 +457,33 @@ paths:
       parameters:
         - $ref: '#/components/parameters/purgeService'
         - $ref: '#/components/parameters/olderThanDays'
+        - $ref: '#/components/parameters/occurredBefore'
+        - $ref: '#/components/parameters/maxId'
       responses:
         '200':
           $ref: '#/components/responses/Purged'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/errors/purge:
+    get:
+      tags: [Admin]
+      summary: Preview a purge of one service's errors by event time
+      description: Same as `GET /admin/logs/purge`, on `logger_errors`.
+      operationId: adminPurgeErrorsPreview
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/purgeService'
+        - $ref: '#/components/parameters/previewOccurredBefore'
+      responses:
+        '200':
+          $ref: '#/components/responses/PurgePreview'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -585,11 +644,41 @@ components:
     olderThanDays:
       name: olderThanDays
       in: query
-      description: Delete entries older than this many days (positive whole number)
+      description: |
+        Delete entries received (`timestamp`) more than this many days ago (positive whole number).
+        Not with `occurredBefore`.
       schema:
         type: integer
         minimum: 1
         default: 365
+    occurredBefore:
+      name: occurredBefore
+      in: query
+      description: |
+        Delete entries that occurred (`occurredAt`) before this date, instead of by arrival. Not with
+        `olderThanDays` (400). Strict ISO-8601, like a body's `occurredAt` (`2026-11-01T03:00:00Z`,
+        `2026-11-01T00:00:00-03:00`); UTC unless it has an offset. A date in the future is a 400:
+        `occurredAt` is never later than the arrival, so it would take entries arriving now.
+      schema:
+        type: string
+        format: date-time
+    previewOccurredBefore:
+      name: occurredBefore
+      in: query
+      required: true
+      description: The cutoff, as in `DELETE /admin/logs?occurredBefore=` (same rules)
+      schema:
+        type: string
+        format: date-time
+    maxId:
+      name: maxId
+      in: query
+      description: |
+        Only with `occurredBefore` (400 otherwise): delete only entries whose `_id` is at most this,
+        the preview's `maxId`, so entries stored after the preview are kept. Positive whole number.
+      schema:
+        type: integer
+        minimum: 1
   schemas:
     Success:
       type: object
@@ -799,6 +888,31 @@ components:
                       deleted:
                         type: integer
                         example: 42
+    PurgePreview:
+      description: What the matching DELETE would delete right now
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Success'
+              - properties:
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: Entries the DELETE would remove
+                        example: 1234
+                      occurredBefore:
+                        type: string
+                        format: date-time
+                        description: The cutoff, normalised to UTC (ms); send it back with the DELETE
+                        example: '2026-11-01T03:00:00.000Z'
+                      maxId:
+                        type: integer
+                        nullable: true
+                        description: Highest matching `_id`, `null` when `count` is 0; send it back as the DELETE's `maxId`
+                        example: 98213
     BadRequest:
       description: Invalid body or parameters
       content:

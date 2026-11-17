@@ -319,26 +319,72 @@ class LogControl extends \logger\Log\Base\LogControlBase {
 	}
 
 	/**
-	 * Deletes `service`'s rows older than `days` days (one cutoff, from the same clock as `timestamp`),
-	 * then writes a self-audit row into `logger_logs` under SELF_SERVICE. The count is the DELETE's
-	 * own affected rows, read before the audit write replaces it.
+	 * The purge's WHERE, and the only place it is built: Purge() and PurgeCount() share it, so a
+	 * preview counts exactly what the DELETE removes. Two modes:
+	 * - `cutoff` an int: rows received (`timestamp`) more than that many days ago (one cutoff, from
+	 *   the same clock as `timestamp`);
+	 * - `cutoff` a date: rows that occurred (`occurred_at`) before it. `maxId` then keeps rows stored
+	 *   after a preview (ids only grow), so a late-synced batch can't add to what was confirmed.
+	 */
+	private static function PurgeWhere(string $service, int|\DateTimeImmutable $cutoff, ?int $maxId): string {
+		if (!self::ValidService($service)) throw new MagratheaApiException("Invalid 'service'", 400);
+		$where = "`service` = '".$service."'";
+		if (is_int($cutoff)) {
+			if ($maxId !== null) throw new MagratheaApiException("'maxId' only works with 'occurredBefore'", 400);
+			return $where." AND `timestamp` < '".self::Sql(self::ReceivedAt()->modify("-".$cutoff." days"))."'";
+		}
+		// `occurred_at` is never later than its arrival: a future cutoff would take entries arriving now
+		if ($cutoff > self::ReceivedAt()) throw new MagratheaApiException("'occurredBefore' can't be in the future", 400);
+		$where .= " AND `occurred_at` < '".self::Sql(self::InRange($cutoff, "occurredBefore"))."'";
+		if ($maxId !== null) {
+			if ($maxId < 1) throw new MagratheaApiException("Invalid 'maxId'", 400);
+			$where .= " AND `id` <= ".$maxId;
+		}
+		return $where;
+	}
+
+	/**
+	 * What Purge() with this `occurredBefore` would delete right now (GET /admin/logs|errors/purge).
+	 * `maxId` is the highest matching id (null when nothing matches), for the confirmation to send back.
+	 * @return array{count:int, occurredBefore:string, maxId:?int}
+	 */
+	public static function PurgeCount(string $table, string $service, \DateTimeImmutable $occurredBefore): array {
+		$table = self::Table($table);
+		$row = (array)Database::Instance()->QueryRow(
+			"SELECT COUNT(*) AS `count`, MAX(`id`) AS `max_id` FROM `".$table."` WHERE ".self::PurgeWhere($service, $occurredBefore, null)
+		);
+		return [
+			"count" => (int)($row["count"] ?? 0),
+			"occurredBefore" => self::Iso($occurredBefore),
+			"maxId" => isset($row["max_id"]) ? (int)$row["max_id"] : null,
+		];
+	}
+
+	/**
+	 * Deletes `service`'s rows by arrival (`cutoff` in days) or by event time (`cutoff` a date, with an
+	 * optional `maxId`; see PurgeWhere()), then writes a self-audit row into `logger_logs` under
+	 * SELF_SERVICE. The count is the DELETE's own affected rows, read before the audit write replaces it.
 	 * @return array{deleted:int}
 	 */
-	public static function Purge(string $table, string $service, int $days, string $performedBy): array {
+	public static function Purge(string $table, string $service, int|\DateTimeImmutable $cutoff, string $performedBy, ?int $maxId = null): array {
 		$table = self::Table($table);
-		if (!self::ValidService($service)) throw new MagratheaApiException("Invalid 'service'", 400);
 		$db = Database::Instance();
-		$cutoff = self::Sql(self::ReceivedAt()->modify("-".$days." days"));
-		$db->Query("DELETE FROM `".$table."` WHERE `service` = '".$service."' AND `timestamp` < '".$cutoff."'");
+		$db->Query("DELETE FROM `".$table."` WHERE ".self::PurgeWhere($service, $cutoff, $maxId));
 		$deleted = $db->LastAffectedRows();
-		self::Write(self::LOGS, self::SELF_SERVICE, (object)[
+		$audit = [
 			"environment" => "unknown",
 			"action" => $table === self::ERRORS ? "purge_errors" : "purge_logs",
 			"targetService" => $service,
-			"cutoffDays" => $days,
-			"deletedCount" => $deleted,
-			"performedBy" => $performedBy,
-		]);
+		];
+		if (is_int($cutoff)) {
+			$audit["cutoffDays"] = $cutoff;
+		} else {
+			$audit["occurredBefore"] = self::Iso($cutoff);
+			$audit["maxId"] = $maxId;
+		}
+		$audit["deletedCount"] = $deleted;
+		$audit["performedBy"] = $performedBy;
+		self::Write(self::LOGS, self::SELF_SERVICE, (object)$audit);
 		return [ "deleted" => $deleted ];
 	}
 
